@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Понуди{% endblock %}
+{% block content %}
+<h1>Постави Excel фајл</h1>
+<form method="post" enctype="multipart/form-data" action="/ponudi/upload">
+  <input type="file" name="file" accept=".xlsx,.xls" required>
+  <button type="submit">Прикачи</button>
+</form>
+
+{% if message %}
+  <p>{{ message }}</p>
+{% endif %}
+{% endblock %}

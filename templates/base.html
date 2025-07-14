@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}SigLifeReporting{% endblock %}</title>
+  <style>
+    /* Твојот CSS за sidebar, body, header (постави го тука од примерот што го даде) */
+    /* Пример: */
+    body, html {
+      margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+    }
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: 220px; height: 100%; background-color: #2c3e50;
+      color: white; padding-top: 2rem; display: flex; flex-direction: column;
+    }
+    .sidebar h2 {
+      text-align: center; margin-bottom: 2rem; font-weight: 700; letter-spacing: 2px; font-size: 1.5rem;
+    }
+    .sidebar a {
+      padding: 15px 20px; text-decoration: none; color: #ecf0f1; font-weight: 600;
+      border-left: 4px solid transparent; transition: background 0.3s;
+    }
+    .sidebar a:hover, .sidebar a.active {
+      background-color: #34495e; border-left-color: #3498db; color: white;
+    }
+    .main-content {
+      margin-left: 220px; padding: 1rem 2rem; min-height: 100vh;
+    }
+    header {
+      height: 60px; background: white; display: flex; align-items: center;
+      justify-content: flex-end; padding: 0 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px; position: sticky; top: 0; z-index: 100;
+    }
+    header .user-info {
+      font-weight: 600; color: #2c3e50; margin-right: 20px;
+    }
+    header a.logout-btn {
+      background: #e74c3c; color: white; padding: 8px 15px; border-radius: 4px;
+      text-decoration: none; font-weight: 600; transition: background 0.3s;
+    }
+    header a.logout-btn:hover {
+      background: #c0392b;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>SigLife</h2>
+    <a href="/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="/aso_reports" class="{% if active == 'aso_reports' %}active{% endif %}">АСО извештаи</a>
+    <a href="/provizia" class="{% if active == 'provizia' %}active{% endif %}">Провизија</a>
+    <a href="/Ponuda" class="{% if active == 'ponuda' %}active{% endif %}">Импорт на понуда од ексел</a>
+    <a href="/MatematickaRezerva" class="{% if active == 'matematicka_rezerva' %}active{% endif %}">Математичка резерва</a>
+    <!-- Додај повеќе линкови ако сакаш -->
+  </div>
+
+  <div class="main-content">
+    <header>
+    <div class="user-info">
+    {{ user.full_name if user else "Гостин" }}
+    ({{ user.role if user else "корисник" }})
+    </div>
+      <a href="/logout" class="logout-btn">Logout</a>
+    </header>
+
+    {% block content %}
+    <!-- Секој page ќе го пополни овој дел -->
+    {% endblock %}
+  </div>
+</body>
+</html>
+

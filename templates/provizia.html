@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Провизија{% endblock %}
+
+{% block content %}
+<style>
+  .panel {
+    background: #eceff1;
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+  .panel.gray    { background: #d0d4d8; }
+  .panel h2      { margin-bottom: 1rem; color:#2c3e50; }
+  .form-row      { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem; }
+  .form-row > *  { flex:1 1 180px; min-width:150px; }
+  .btn-primary   { padding:.5rem 1rem; border:none; border-radius:4px; background:#3498db; color:#fff; cursor:pointer; }
+  .btn-primary:hover { background:#2980b9; }
+  .result        { margin-top:.8rem; font-weight:600; }
+  input[type="search"] { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
+  select         { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
+</style>
+
+<div class="panel">
+  <h2>Провизија за агенти и промотори</h2>
+  <div class="form-row">
+    <select id="monthAg"></select>
+    <select id="yearAg"></select>
+  </div>
+  <div class="form-row">
+    <input type="search" id="agentSearch" placeholder="Пребарaj агент…" />
+    <select id="agentSel" size="1"></select>
+  </div>
+  <div class="form-row">
+    <select id="regionSel"></select>
+    <select id="teamSel"></select>
+  </div>
+  <div class="form-row">
+    <button class="btn-primary" id="btnGenPdf">Генерирај PDF</button>
+    <button class="btn-primary" id="btnMailAll">Прати маил сите</button>
+    <button class="btn-primary" id="btnMailResp">Прати маил одговорно лице</button>
+  </div>
+  <div class="result" id="resultAgents"></div>
+</div>
+
+<div class="panel gray">
+  <h2>Провизија за брокери</h2>
+  <div class="form-row">
+    <select id="monthBr"></select>
+    <select id="yearBr"></select>
+  </div>
+  <div class="form-row">
+    <select id="brokerSel" style="flex:2 1 400px;"></select>
+  </div>
+  <button class="btn-primary" id="btnInkasoBr">Инкасо провизија за брокери</button>
+  <div class="result" id="resultBrokers"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const apiGet  = (url) => fetch(url).then(r => r.json());
+const apiPost = (url, body) => fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+
+async function initStatic() {
+  const [months, years] = await Promise.all([
+    apiGet('/api/months'),
+    apiGet('/api/years')
+  ]);
+  [ 'monthAg','monthBr' ].forEach(id => {
+    months.forEach(m => { const o=document.createElement('option'); o.text=o.value=m; $(id).appendChild(o); });
+  });
+  [ 'yearAg','yearBr' ].forEach(id => {
+    years.forEach(y => { const o=document.createElement('option'); o.text=o.value=y; $(id).appendChild(o); });
+    $(id).value = new Date().getFullYear();
+  });
+}
+
+async function initDynamic() {
+  const [agents, regions, teams, brokers] = await Promise.all([
+    apiGet('/api/agents'),
+    apiGet('/api/regions'),
+    apiGet('/api/teams'),
+    apiGet('/api/brokers')
+  ]);
+
+  function reloadAgentDropdown(filter='') {
+    const sel = $('agentSel');
+    sel.innerHTML='';
+    agents
+      .filter(a => a.name.toLowerCase().includes(filter.toLowerCase()))
+      .forEach(a => { const o=document.createElement('option'); o.value=a.id; o.text=a.name + ' (ID: '+a.id+')'; sel.appendChild(o); });
+  }
+  reloadAgentDropdown();
+  $('agentSearch').addEventListener('input', e => reloadAgentDropdown(e.target.value));
+
+  regions.forEach(r => { const o=document.createElement('option'); o.value=r.id; o.text=r.name + ' (ID: '+r.id+')'; $('regionSel').appendChild(o); });
+  teams.forEach(t => { const o=document.createElement('option'); o.value=t.id; o.text=t.name + ' (ID: '+t.id+')'; $('teamSel').appendChild(o); });
+  brokers.forEach(b => { const o=document.createElement('option'); o.value=b.id; o.text=b.name + ' (ID: '+b.id+')'; $('brokerSel').appendChild(o); });
+}
+
+$('btnGenPdf').addEventListener('click', async () => {
+  const body = {
+    month:  $('monthAg').value,
+    year:   parseInt($('yearAg').value),
+    agent_id: $('agentSel').value || null,
+    region_id: $('regionSel').value || null,
+    team_id: $('teamSel').value || null
+  };
+  const res = await apiPost('/api/generate_pdf', body);
+  $('resultAgents').textContent = res.message;
+  $('resultAgents').style.color = res.success? 'green':'red';
+});
+
+$('btnMailAll').addEventListener('click', async () => {
+  const body = {
+    month:  $('monthAg').value,
+    year:   parseInt($('yearAg').value),
+    agent_id: $('agentSel').value || null,
+    region_id: $('regionSel').value || null,
+    team_id: $('teamSel').value || null
+  };
+  const res = await apiPost('/api/mail_all', body);
+  $('resultAgents').textContent = res.message;
+  $('resultAgents').style.color = res.success? 'green':'red';
+});
+
+$('btnMailResp').addEventListener('click', async () => {
+  const body = {
+    month:  $('monthAg').value,
+    year:   parseInt($('yearAg').value),
+    agent_id: $('agentSel').value || null,
+    region_id: $('regionSel').value || null,
+    team_id: $('teamSel').value || null
+  };
+  const res = await apiPost('/api/mail_resp', body);
+  $('resultAgents').textContent = res.message;
+  $('resultAgents').style.color = res.success? 'green':'red';
+});
+
+$('btnInkasoBr').addEventListener('click', async () => {
+  const body = {
+    month: $('monthBr').value,
+    year:  parseInt($('yearBr').value),
+    broker_id: $('brokerSel').value
+  };
+  const res = await apiPost('/api/inkaso_brokeri', body);
+  $('resultBrokers').textContent = res.message;
+  $('resultBrokers').style.color = res.success? 'green':'red';
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await initStatic();
+  await initDynamic();
+});
+</script>
+{% endblock %}
