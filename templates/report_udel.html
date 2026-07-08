@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Преглед на удели{% endblock %}
+
+{% block content %}
+<h1>📊 Преглед на удели </h1>
+
+<form method="post" action="/siglife-report/ReportUdel/export" style="margin-top: 1rem;">
+
+  <!-- DATE (CRITICAL: name must match Form field) -->
+  <label for="export_date">Датум пресек:</label>
+  <input
+    type="date"
+    name="export_date_form"
+    id="export_date"
+    value="{{ selected_date }}"
+    required
+  >
+
+  <!-- DOGOVORUVAC -->
+  <label for="dogovoruvac">Договорувач:</label>
+  <input
+    type="text"
+    name="dogovoruvac_form"
+    id="dogovoruvac"
+    value="{{ dogovoruvac | default('') }}"
+    placeholder="Договорувач (опционално)"
+  >
+
+  <!-- FORMAT -->
+  <label for="format">Формат:</label>
+  <select name="format_form" id="format">
+    <option value="excel" selected>Excel</option>
+  </select>
+
+  <!-- SUBMIT -->
+  <button type="submit">Експорт</button>
+</form>
+
+{% endblock %}

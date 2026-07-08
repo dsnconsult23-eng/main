@@ -22,8 +22,8 @@ def Informixdriver():
         driver2="C:\\SigLifeReporting_Informix\\bson-4.2.0.jar"        
     else:
         #Linux
-        driver1="/jdbc-4.50.4.1.jar"
-        driver2="/bson-4.2.0.jar"
+        driver1="/opt/siglife-reporting/jdbc-4.50.4.1.jar"
+        driver2="/opt/siglife-reporting/bson-4.2.0.jar"
 
     return driver1,driver2
 
@@ -38,7 +38,7 @@ def MSdriver():
         pth1="C:\\SigLifeReporting_Informix\\UCanAccess\\lib\\"
     else:
         #Linux
-        pth="/UCanAccess/"
+        pth="/opt/siglife-reporting/UCanAccess/"
         pth1=pth+"lib/"            
                     
     # Driveri za MS-Access: https://ucanaccess.sourceforge.net/site.html            
@@ -83,6 +83,50 @@ def OSISinit():
         return "",False                    
 
     return db,OK
+# In[7]:
+def OSISinitConn():
+    OK=True
+    user="appuser"
+    password="OxBm?Q(*"
+    
+    driver1,driver2=Informixdriver()
+    driver3=MSdriver()
+    
+    try:        
+        conn = jaydebeapi.connect("com.informix.jdbc.IfxDriver",
+                                  "jdbc:informix-sqli://192.168.100.120:5864/uniqa_live:DB_LOCALE=en_US.utf8",
+                                  [user, password],
+                                  [driver1,driver2,driver3])
+        print ("conn",conn)
+        db=conn.cursor()
+    except Exception as e:
+        print ("Error: ",e)
+        return  None, None,False                    
+
+    return conn,db,OK
+
+
+def OSISinitReporting():
+    OK=True
+    user="appuser"
+    password="OxBm?Q(*"
+    
+    driver1,driver2=Informixdriver()
+    driver3=MSdriver()
+    
+    try:        
+        conn = jaydebeapi.connect("com.informix.jdbc.IfxDriver",
+                                  "jdbc:informix-sqli://192.168.100.143:1400/uniqa_live:DB_LOCALE=en_US.utf8",
+                                  [user, password],
+                                  [driver1,driver2,driver3])
+        print ("conn",conn)
+        db=conn.cursor()
+    except Exception as e:
+        print ("Error: ",e)
+        return  None, None,False                    
+
+    return conn,db,OK
+
 
     
 

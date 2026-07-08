@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions 
+    xmlns="http://schemas.xmlsoap.org/wsdl/" 
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" 
+    xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+    xmlns:tns="http://webservisiiute.siglife.mk/ponudi"
+    targetNamespace="http://webservisiiute.siglife.mk/ponudi">
+
+  <!-- Types -->
+  <types>
+    <xs:schema targetNamespace="http://webservisiiute.siglife.mk/ponudi">
+      <xs:element name="UploadRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="fileName" type="xs:string"/>
+            <xs:element name="fileContent" type="xs:base64Binary"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="UploadResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="status" type="xs:string"/>
+            <xs:element name="message" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  </types>
+
+  <!-- Messages -->
+  <message name="UploadRequestMessage">
+    <part name="parameters" element="tns:UploadRequest"/>
+  </message>
+
+  <message name="UploadResponseMessage">
+    <part name="parameters" element="tns:UploadResponse"/>
+  </message>
+
+  <!-- Port Type -->
+  <portType name="PonudiPortType">
+    <operation name="UploadFile">
+      <input message="tns:UploadRequestMessage"/>
+      <output message="tns:UploadResponseMessage"/>
+    </operation>
+  </portType>
+
+  <!-- Binding -->
+  <binding name="PonudiBinding" type="tns:PonudiPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="UploadFile">
+      <soap:operation soapAction="UploadFile"/>
+      <input>
+        <soap:body use="literal"/>
+      </input>
+      <output>
+        <soap:body use="literal"/>
+      </output>
+    </operation>
+  </binding>
+
+  <!-- Service -->
+  <service name="PonudiService">
+    <port name="PonudiPort" binding="tns:PonudiBinding">
+      <soap:address location="https://webservisiiute.siglife.mk/ponudi/upload"/>
+    </port>
+  </service>
+</definitions>

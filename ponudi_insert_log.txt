@@ -37770,3 +37770,288 @@ INSERT INTO ponudi_import (
                         1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 25.06.2025.xlsx'
                     );
 
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        1, 'Теодора Михајловска', 1107987415021, 'Битола', 'Никола Тесла 66',
+                        'Теодора Михајловска', 1107987415021, 'Битола', 'Никола Тесла 66',
+                        38, 'Никола Тесла 66', 'a', 'a', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Теодора Михајловска', 1107987415021, 'законски наследници', 'a',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 25.06.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        1, 'Теодора Михајловска', 1107987415021, 'Битола', 'Никола Тесла 66',
+                        'Теодора Михајловска', 1107987415021, 'Битола', 'Никола Тесла 66',
+                        38, 'Никола Тесла 66', 'a', 'a', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Теодора Михајловска', 1107987415021, 'законски наследници', 'a',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 25.06.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        1, 'Катерина Темелковска Ристевска', 511992415015, 'Битола', 'Карпош 5-6/17',
+                        'Катерина Темелковска Ристевска', 511992415015, 'Битола', 'Карпош 5-6/17',
+                        33, 'Карпош 5-6/17', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Катерина Темелковска Ристевска', 511992415015, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        2, 'Викторија Стаматовска', 1207974455045, 'Скопје', 'Радика 3/2-14',
+                        'Викторија Стаматовска', 1207974455045, 'Скопје', 'Радика 3/2-14',
+                        51, 'Радика 3/2-14', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Викторија Стаматовска', 1207974455045, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        3, 'Наташа Пејчиновска', 204976415013, 'Битола', 'Крстин Чулаковски 28',
+                        'Наташа Пејчиновска', 204976415013, 'Битола', 'Крстин Чулаковски 28',
+                        49, 'Крстин Чулаковски 28', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Наташа Пејчиновска', 204976415013, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        4, 'Даниела Пеливаноска - Дамеска', 1710989445007, 'Прилеп', 'Орде Тутески 5',
+                        'Даниела Пеливаноска - Дамеска', 1710989445007, 'Прилеп', 'Орде Тутески 5',
+                        36, 'Орде Тутески 5', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Даниела Пеливаноска - Дамеска', 1710989445007, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        5, 'Даниел Симакоски', 1305997450131, 'Скопје', 'Виктор Иванович Григорович ',
+                        'Даниел Симакоски', 1305997450131, 'Скопје', 'Виктор Иванович Григорович ',
+                        28, 'Виктор Иванович Григорович ', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Даниел Симакоски', 1305997450131, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        6, 'Дарко Вељановски', 3105990410000, 'Битола', 'Милан С. Петревски 30',
+                        'Дарко Вељановски', 3105990410000, 'Битола', 'Милан С. Петревски 30',
+                        35, 'Милан С. Петревски 30', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Дарко Вељановски', 3105990410000, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 13, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        7, 'Елеонора Делиниколова', 2105979455066, 'Скопје', 'Бул. В.С. Бато бр.7  2/12',
+                        'Елеонора Делиниколова', 2105979455066, 'Скопје', 'Бул. В.С. Бато бр.7  2/12',
+                        46, 'Бул. В.С. Бато бр.7  2/12', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Елеонора Делиниколова', 2105979455066, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 14, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        8, 'Јасмина Буневска Талевска', 802978415015, 'Битола', 'Ѓорче Петров 19А-1',
+                        'Јасмина Буневска Талевска', 802978415015, 'Битола', 'Ѓорче Петров 19А-1',
+                        47, 'Ѓорче Петров 19А-1', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Јасмина Буневска Талевска', 802978415015, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 13, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        9, 'Паце Јанчева', 906983445011, 'Прилеп', 'Пере Тошев бр.8 - 1/4',
+                        'Паце Јанчева', 906983445011, 'Прилеп', 'Пере Тошев бр.8 - 1/4',
+                        42, 'Пере Тошев бр.8 - 1/4', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Паце Јанчева', 906983445011, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 14, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        10, 'Даниела Николовска Неделкоска', 912971475047, 'Скопје', '8ми Септември 12/4-14',
+                        'Даниела Николовска Неделкоска', 912971475047, 'Скопје', '8ми Септември 12/4-14',
+                        54, '8ми Септември 12/4-14', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Даниела Николовска Неделкоска', 912971475047, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 14, '64003','Понуда Синдикат финал 03.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        1, 'Татјана Блажевска', 501973415009, 'Битола', 'Охридска 56',
+                        'Татјана Блажевска', 501973415009, 'Битола', 'Охридска 56',
+                        52, 'Охридска 56', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Татјана Блажевска', 501973415009, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','Ponuda_12.09.2025.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        1, 'Марија Стојаноска', 2301995445031, 'Битола', 'с.Тополчани',
+                        'Марија Стојаноска', 2301995445031, 'Битола', 'с.Тополчани',
+                        30, 'с.Тополчани', '', '', 10,
+                        mdy(7, 1, 2025),
+                        mdy(7, 1, 2035),
+                        570, 60, 570, 8,
+                        'Марија Стојаноска', 2301995445031, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','22.09.2025 Template.xlsx'
+                    );
+
+INSERT INTO ponudi_import (
+                        rb, dogovoruvac_naziv, dog_embg, dog_grad, dog_adresa,
+                        osig_name, osig_embg, osig_grad, osig_adresa,
+                        prest_starost, adresa_izv, telefon, email, godini,
+                        skadenca_od, skadenca_do, 
+                        osig_suma, premija, osig_suma_tbs, premija_tbs,
+                        korisnik_d_name, korisnik_d_embg, korisnik_s_name, srodstvo,
+                        agent, promotor, nacin_plakanje, rati, firma,filename
+                    ) VALUES (
+                        2, 'Анита Ангелeвска', 703971418002, 'Битола', 'ул.Глигор Прличев 1/74',
+                        'Анита Ангелeвска', 703971418002, 'Битола', 'ул.Глигор Прличев 1/74',
+                        54, 'ул.Глигор Прличев 1/74', '', '', 10,
+                        mdy(9, 1, 2025),
+                        mdy(9, 1, 2035),
+                        570, 60, 570, 8,
+                        'Анита Ангелeвска', 703971418002, 'законски наследници', '',
+                        1795, 1828, 'административна забрана', 12, '64003','22.09.2025 Template.xlsx'
+                    );
+

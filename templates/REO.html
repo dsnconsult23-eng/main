@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}РЕО{% endblock %}
+
+{% block content %}
+<h1>📊 РЕО</h1>
+
+<form method="post" action="/siglife-report/REO/export" style="margin-top: 1rem;">
+  <label for="month">Месец:</label>
+  <input type="number" name="month_form" id="month" min="1" max="12" required>
+
+  <label for="year">Година:</label>
+  <input type="number" name="year_form" id="year" min="2000" max="2100" required>
+
+  <label for="limit">Лимит:</label>
+  <input type="number" name="limit_form" id="limit" step="0.01" value="75000" required>
+
+  <label for="format">Формат:</label>
+  <select name="format_form" id="format">
+    <option value="excel">Excel</option>
+  </select>
+
+  <button type="submit">Експорт</button>
+</form>
+{% endblock %}

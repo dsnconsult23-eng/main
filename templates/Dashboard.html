@@ -1,48 +1,44 @@
 {% extends "base.html" %}
 
-{% block title %}Дашборд{% endblock %}
+{% block title %}Reporting — Осигурување{% endblock %}
 
 {% block content %}
-<h1 style="margin-bottom: 1rem;">Добредојдовте, {{ user }}!</h1>
+<h1 style="margin-bottom: 1rem;">📈 Извештаи и Анализи за Осигурување</h1>
 
-<div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-  <!-- Картички со статистики -->
-  <div style="flex: 1; min-width: 200px; background: #e8f4fd; padding: 1rem; border-radius: 8px;">
-    <h3>✅ Активни полиси</h3>
-    <p style="font-size: 1.5rem;">2,415</p>
-  </div>
-  <div style="flex: 1; min-width: 200px; background: #fff3cd; padding: 1rem; border-radius: 8px;">
-    <h3>📅 Истекуваат овој месец</h3>
-    <p style="font-size: 1.5rem;">145</p>
-  </div>
-  <div style="flex: 1; min-width: 200px; background: #d4edda; padding: 1rem; border-radius: 8px;">
-    <h3>📄 Нови полиси (Јули)</h3>
-    <p style="font-size: 1.5rem;">84</p>
-  </div>
-  <div style="flex: 1; min-width: 200px; background: #f8d7da; padding: 1rem; border-radius: 8px;">
-    <h3>⚠️ Полиси со грешки</h3>
-    <p style="font-size: 1.5rem;">8</p>
-  </div>
-</div>
+<section style="background: #f9f9f9; padding: 1.5rem; border-radius: 8px; line-height: 1.6;">
+  <p>
+    Модулот <strong>„Reporting“</strong> овозможува целосен увид во сите клучни аспекти на работењето со полиси за животно осигурување.
+    Преку јасни визуелни прикази и детални табеларни извештаи, корисниците можат брзо да ги следат перформансите, трендовите и ризиците
+    во осигурителното портфолио.
+  </p>
 
-<hr style="margin: 2rem 0;">
+  <h3>🔍 Главни можности:</h3>
+  <ul>
+    <li>Преглед на активни, истечени и нови полиси по период, агенција или производ.</li>
+    <li>Анализа на премии по месеци, споредба со претходни периоди и трендови на раст.</li>
+    <li>Извештаи за доцнење на плаќања и ризични клиенти.</li>
+    <li>Откривање и прикажување на полиси со грешки или неконзистентни податоци.</li>
+    <li>Можност за експорт на извештаи во Excel или PDF формат за понатамошна анализа.</li>
+  </ul>
 
-<!-- Брзи линкови / акции -->
-<h2>📌 Брзи Акции</h2>
-<ul style="list-style: none; padding-left: 0;">
-  <li><a href="/PolisiPregled" class="button-link">🔎 Преглед на сите полиси</a></li>
-  <li><a href="/MatematickaRezerva" class="button-link">📤 Експорт на полиси</a></li>
-  <li><a href="/NovaPolisa" class="button-link">➕ Додади нова полиса</a></li>
-  <li><a href="/Premija" class="button-link">🧾 Пресметка на премија</a></li>
-</ul>
+  <h3>💡 Цел на системот:</h3>
+  <p>
+    Со овој модул, менаџерите, актуарите и агентите можат полесно да донесуваат одлуки базирани на податоци,
+    да ги следат клучните индикатори за успех и да го оптимизираат процесот на следење на осигурителното портфолио.
+  </p>
 
-<hr style="margin: 2rem 0;">
+  <hr style="margin: 2rem 0;">
 
-<!-- Placeholder график -->
-<h2>📊 Преглед на премии по месеци</h2>
-<div style="background: #f0f0f0; height: 250px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center;">
-  <em>Тука ќе се прикаже график (на пример со Chart.js)</em>
-</div>
+  {% if user.role == 'admin' %}
+  <h3>🚀 Брзи Акции:</h3>
+  <ul style="list-style: none; padding-left: 0;">
+      <li><a href="/siglife-report/ASO" class="button-link">🔎 АСО</a></li>
+      <li><a href="/siglife-report/MatematickaRezerva" class="button-link">📤 Математичка резерва</a></li>
+      <li><a href="/siglife-report/REO" class="button-link">🧾 Прегледи за РЕО</a></li>
+  </ul>
+  {% endif %}
+
+</section>
 {% endblock %}
 
 {% block styles %}
@@ -59,6 +55,11 @@
   .button-link:hover {
     background-color: #2980b9;
   }
+  section ul {
+    margin-top: 0.5rem;
+    padding-left: 1.5rem;
+  }
 </style>
 {% endblock %}
 
+{% set active = "dashboard" %}

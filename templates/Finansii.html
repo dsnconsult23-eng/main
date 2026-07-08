@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Финансии – Салдирање{% endblock %}
+
+{% block content %}
+<h1>💰 Финансии – Салдирање</h1>
+
+<form id="finForm"
+      method="post"
+      action="/siglife-report/Finansii"
+      style="margin-top: 1rem;">
+
+  <label for="export_date">Датум пресек:</label>
+  <input
+    type="date"
+    name="export_date_form"
+    id="export_date"
+    value="{{ selected_date }}"
+    required
+  >
+
+  <div style="margin-top: 1rem;">
+    <button type="button" onclick="startRun()">Салдирање</button>
+    <button type="button" onclick="startExportAsync()">Салдирање – експорт</button>
+  </div>
+
+  <p id="statusBox" style="margin-top: 1rem;">
+    {% if message %}{{ message }}{% endif %}
+  </p>
+
+</form>
+
+<script>
+let pollTimerRun = null;
+let pollTimerExport = null;
+
+function setStatus(msg) {
+  document.getElementById("statusBox").innerText = msg;
+}
+
+// чита JSON ако е JSON, инаку покажи preview од HTML
+async function readJsonSafe(res) {
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  const text = await res.text();
+
+  if (ct.includes("application/json")) {
+    try { return JSON.parse(text); }
+    catch (e) {
+      return { ok: false, error: "Invalid JSON returned by server", raw: text.slice(0, 200) };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "Server returned HTML (not JSON). Possible redirect/login/404/500.",
+    raw: text.slice(0, 200)
+  };
+}
+
+const ajaxHeaders = { "X-Requested-With": "XMLHttpRequest" };
+
+/* ---------------------------
+   1) SALDIRANJE (procedure only)
+--------------------------- */
+async function startRun() {
+  const dateVal = document.getElementById("export_date").value;
+  setStatus("⏳ Стартувам салдирање (процедура)...");
+
+  const formData = new FormData();
+  formData.append("export_date_form", dateVal);
+
+  try {
+    const res = await fetch("/siglife-report/Finansii/run-async", {
+      method: "POST",
+      headers: ajaxHeaders,
+      body: formData,
+      credentials: "same-origin"
+    });
+
+    const data = await readJsonSafe(res);
+
+    if (!data.ok) {
+      setStatus("❌ " + (data.error || "Грешка") + (data.raw ? ("\n" + data.raw) : ""));
+      return;
+    }
+
+    const jobId = data.job_id;
+    setStatus("▶️ Салдирањето е пуштено. Проверувам статус...");
+
+    if (pollTimerRun) clearInterval(pollTimerRun);
+    pollTimerRun = setInterval(() => pollRunJob(jobId), 2000);
+
+  } catch (e) {
+    setStatus("❌ Грешка при повик: " + e);
+  }
+}
+
+async function pollRunJob(jobId) {
+  try {
+    const res = await fetch("/siglife-report/Finansii/job/" + jobId, {
+      headers: ajaxHeaders,
+      credentials: "same-origin"
+    });
+
+    const data = await readJsonSafe(res);
+
+    if (!data.ok) {
+      setStatus("❌ " + (data.error || "Грешка при читање статус") + (data.raw ? ("\n" + data.raw) : ""));
+      clearInterval(pollTimerRun);
+      pollTimerRun = null;
+      return;
+    }
+
+    if (data.status === "queued" || data.status === "running") {
+      setStatus("⏳ Се извршува... (" + data.status + ")");
+      return;
+    }
+
+    clearInterval(pollTimerRun);
+    pollTimerRun = null;
+
+    if (data.status === "success") {
+      setStatus("✅ " + (data.message || "Успешно салдирање"));
+    } else {
+      setStatus("❌ " + (data.message || "Грешка при салдирање"));
+    }
+
+  } catch (e) {
+    setStatus("❌ Грешка при проверка: " + e);
+    clearInterval(pollTimerRun);
+    pollTimerRun = null;
+  }
+}
+
+/* ---------------------------
+   2) EXPORT (Excel only, NO procedure)
+--------------------------- */
+async function startExportAsync() {
+  const dateVal = document.getElementById("export_date").value;
+  setStatus("⏳ Стартувам експорт (Excel)...");
+
+  const formData = new FormData();
+  formData.append("export_date_form", dateVal);
+
+  try {
+    const res = await fetch("/siglife-report/Finansii/export-async", {
+      method: "POST",
+      headers: ajaxHeaders,
+      body: formData,
+      credentials: "same-origin"
+    });
+
+    const data = await readJsonSafe(res);
+
+    if (!data.ok) {
+      setStatus("❌ " + (data.error || "Грешка") + (data.raw ? ("\n" + data.raw) : ""));
+      return;
+    }
+
+    const jobId = data.job_id;
+    setStatus("▶️ Експорт job е пуштен. Чекам да заврши...");
+
+    if (pollTimerExport) clearInterval(pollTimerExport);
+    pollTimerExport = setInterval(() => pollExportJob(jobId), 2000);
+
+  } catch (e) {
+    setStatus("❌ Грешка при повик: " + e);
+  }
+}
+
+async function pollExportJob(jobId) {
+  try {
+    const res = await fetch("/siglife-report/Finansii/export-job/" + jobId, {
+      headers: ajaxHeaders,
+      credentials: "same-origin"
+    });
+
+    const data = await readJsonSafe(res);
+
+    if (!data.ok) {
+      setStatus("❌ " + (data.error || "Грешка при читање статус") + (data.raw ? ("\n" + data.raw) : ""));
+      clearInterval(pollTimerExport);
+      pollTimerExport = null;
+      return;
+    }
+
+    if (data.status === "queued" || data.status === "running") {
+      setStatus("⏳ Се извршува... (" + data.status + ")");
+      return;
+    }
+
+    clearInterval(pollTimerExport);
+    pollTimerExport = null;
+
+    if (data.status === "success") {
+      setStatus("✅ " + (data.message || "Excel е подготвен."));
+      window.location.href = data.download_url; // auto download
+    } else {
+      setStatus("❌ " + (data.message || "Грешка при експорт"));
+    }
+
+  } catch (e) {
+    setStatus("❌ Грешка при проверка: " + e);
+    clearInterval(pollTimerExport);
+    pollTimerExport = null;
+  }
+}
+</script>
+
+{% endblock %}

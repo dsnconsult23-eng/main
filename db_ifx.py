@@ -15,7 +15,7 @@ def _informix_jars():
     if platform.system() == "Windows":
         base = r"C:\\SigLifeReporting_Informix"
     else:
-        base = "/"
+        base = "/opt/siglife-reporting/"
     return [
         os.path.join(base, "jdbc-4.50.4.1.jar"),
         os.path.join(base, "bson-4.2.0.jar"),
@@ -25,7 +25,7 @@ def _ucanaccess_classpath():
     if platform.system() == "Windows":
         base = r"C:\SigLifeReporting_Informix\UCanAccess"
     else:
-        base = "/UCanAccess"
+        base = "/opt/siglife-reporting/UCanAccess"
 
     jars = [
         "ucanaccess-5.0.1.jar",
@@ -54,3 +54,24 @@ def informix_cursor():
         yield conn.cursor()
     finally:
         conn.close()
+
+def Informixdriver():
+    """
+    Returns a live Informix connection.
+    Usage:
+        conn = Informixdriver()
+        curs = conn.cursor()
+        curs.execute("SELECT * FROM my_table")
+        conn.close()
+    """
+    if not DB_PASS:
+        raise RuntimeError("Please set IFX_PASS environment variable.")
+
+    url = f"jdbc:informix-sqli://{DB_HOST}:{DB_PORT}/{DB_NAME}:DB_LOCALE=en_US.utf8"
+    jars = _informix_jars() + _ucanaccess_classpath()
+
+    print("[DEBUG] JDBC URL:", url)
+    print("[DEBUG] JARs:", jars)
+
+    conn = jaydebeapi.connect("com.informix.jdbc.IfxDriver", url, [DB_USER, DB_PASS], jars)
+    return conn

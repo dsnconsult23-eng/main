@@ -1,0 +1,818 @@
+{% extends "base.html" %}
+
+{% block title %}Известувања{% endblock %}
+
+{% block content %}
+<h1>📢 Известувања</h1>
+
+<form id="notifForm"
+      method="post"
+      action="/siglife-report/izvestuvanja"
+      style="margin-top: 1rem;"
+      enctype="multipart/form-data">
+
+  <!-- TARGET -->
+  <label for="target_type">Тип клиенти:</label>
+  <select name="target_type" id="target_type" onchange="applyTemplate()" required>
+    <option value="physical" {% if target_type == 'physical' %}selected{% endif %}>Физички лица</option>
+    <option value="legal" {% if target_type == 'legal' %}selected{% endif %}>Правни лица</option>
+    <option value="all" {% if target_type == 'all' %}selected{% endif %}>Сите</option>
+  </select>
+
+  <!-- SUBJECT -->
+  <label for="subject" style="margin-top: 0.75rem;">Наслов:</label>
+  <input
+    type="text"
+    name="subject"
+    id="subject"
+    value="{{ subject|default('Известување за промена на називот на друштвото за животно осигурување') }}"
+    required
+  >
+
+  <!-- BODY -->
+  <label for="body" style="margin-top: 0.75rem;">Текст на маил:</label>
+  <textarea name="body" id="body" rows="14" required>{{ body|default('') }}</textarea>
+
+  <!-- ATTACH CURRENT STATE -->
+  <div id="attachCurrentStateWrap" style="margin-top: 0.75rem;">
+    <label>
+      <input type="checkbox" name="attach_current_state" id="attach_current_state"
+             {% if attach_current_state %}checked{% endif %}>
+      Прикачи „Тековна состојба“
+    </label>
+  </div>
+
+  <!-- OPTIONAL UPLOAD -->
+  <div style="margin-top: 0.75rem;">
+    <label for="file">Дополнителен прилог (опционално):</label>
+    <input type="file" name="file" id="file" />
+  </div>
+
+  <!-- BUTTON -->
+  <div style="margin-top: 1rem;">
+    <button type="button" id="sendNotifBtn" onclick="startSendAsync()">
+      Испрати известување
+    </button>
+  </div>
+
+  <!-- STATUS -->
+  <p id="statusBox" style="margin-top: 1rem;">
+    {% if message %}
+      {{ message }}
+    {% endif %}
+  </p>
+
+</form>
+
+<hr style="margin: 2rem 0;">
+
+<h2>📄 Опомени (PDF)</h2>
+
+<form id="opomeniForm"
+      method="post"
+      action="/siglife-report/opomeni"
+      style="margin-top: 1rem;"
+      enctype="multipart/form-data">
+
+  <!-- TARGET TYPE -->
+  <label for="op_target_type">Тип клиенти:</label>
+  <select name="target_type" id="op_target_type" required>
+    <option value="physical" {% if op_target_type == 'physical' %}selected{% endif %}>Физички лица</option>
+    <option value="legal" {% if op_target_type == 'legal' %}selected{% endif %}>Правни лица</option>
+    <option value="all" {% if op_target_type == 'all' or not op_target_type %}selected{% endif %}>Сите</option>
+  </select>
+
+  <!-- POLICY NO -->
+  <div style="margin-top: 0.75rem;">
+    <label for="policy_no">Полиса број (опционално):</label>
+    <input type="text"
+           name="policy_no"
+           id="policy_no"
+           value="{{ policy_no|default('') }}"
+           placeholder="пр. S0197690"
+           style="width: 320px;">
+  </div>
+
+  <!-- DATE RANGE -->
+  <div style="margin-top: 0.75rem; display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <label for="date_from">Датум од:</label><br>
+      <input type="date"
+             name="date_from"
+             id="date_from"
+             value="{{ date_from|default('') }}"
+             required>
+    </div>
+
+    <div>
+      <label for="date_to">Датум до:</label><br>
+      <input type="date"
+             name="date_to"
+             id="date_to"
+             value="{{ date_to|default('') }}"
+             required>
+    </div>
+  </div>
+
+  <!-- CLIENT ID -->
+  <div style="margin-top:0.75rem;">
+    <label for="client_id">Client ID (опционално):</label>
+    <input type="text"
+           name="client_id"
+           id="client_id"
+           value="{{ client_id|default('') }}"
+           placeholder="пр. 123456"
+           style="width: 220px;">
+  </div>
+
+  <div style="margin-top:0.75rem;">
+  <label for="test_email">Test email (опционално):</label>
+  <input type="email"
+         name="test_email"
+         id="test_email"
+         placeholder="пр. test@gmail.com"
+         style="width: 320px;">
+  </div>
+
+  <hr style="margin: 1rem 0;">
+
+  <div style="margin-top: 0.75rem;">
+    <div style="font-weight:700; margin-bottom:0.35rem;">Продажен канал</div>
+
+    {% set channels = [
+      ("BANK", "Банки"),
+      ("DIRECT", "Директна продажба"),
+      ("AGENCY_COMP", "Друштва за застапување во осигурување"),
+      ("AGENTS", "Застапници во осигурување"),
+      ("BROKER_COMP", "Осиг. Брокерски друштва"),
+      ("PROMOTOR", "Промотор")
+    ] %}
+
+    {% for code, label in channels %}
+      <label style="display:flex; align-items:center; gap:0.5rem; margin:0.2rem 0;">
+        <input
+          type="checkbox"
+          name="sales_channels"
+          value="{{ code }}"
+          {% if sales_channels and code in sales_channels %}checked{% endif %}
+        >
+        {{ label }}
+      </label>
+    {% endfor %}
+  </div>
+
+  <!-- FORMAT fixed to PDF -->
+  <input type="hidden" name="format" value="pdf">
+
+  <!-- BUTTONS -->
+  <div>
+    <button type="button" id="genOpomeniBtn" onclick="startGenerateOpomeniAsync()">
+      Генерирање на опомени
+    </button>
+
+    <button type="button" id="exportExcelBtn" onclick="exportOpomeniExcel()">
+      📊 Export Excel
+    </button>
+
+    <a id="op_download_link"
+       href="#"
+       style="display:none; padding:0.45rem 0.75rem; border:1px solid #ccc; border-radius:6px; text-decoration:none;">
+      ⬇️ Download PDF
+    </a>
+    <button type="button" id="exportSentExcelBtn" onclick="exportSentOpomeniExcel()">
+    📊 Export испратени опомени
+    </button>
+  </div>
+
+  <!-- STATUS -->
+  <p id="op_statusBox" style="margin-top: 1rem;">
+    {% if op_message %}
+      {{ op_message }}
+    {% endif %}
+  </p>
+
+</form>
+
+<!-- GENERATED ITEMS LIST -->
+<div id="generatedListWrap"
+     style="display:none; margin-top:2rem; border:1px solid #ddd; border-radius:10px; padding:1rem; background:#fff;">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+    <h3 style="margin:0;">✅ Генерирани документи</h3>
+
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+      <label style="display:flex; align-items:center; gap:0.4rem;">
+        <input type="checkbox" id="selectAllGenerated" onchange="toggleSelectAllGenerated(this)">
+        Селектирај сите
+      </label>
+
+      <button type="button" id="sendSelectedBtn" onclick="sendSelectedGeneratedByMail()">
+        📧 Испрати селектирани по mail
+      </button>
+      <button type="button" id="sendKibsTestBtn" onclick="sendViaKibsTest()">
+        🧪 Испрати преку KIBS TEST
+      </button>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem; overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse;" id="generatedTable">
+      <thead>
+        <tr style="background:#f5f5f5;">
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Избери</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Client ID</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Клиент</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Полиса</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Email</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">PDF</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Статус</th>
+        </tr>
+      </thead>
+      <tbody id="generatedTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <p id="sendSelectedStatus" style="margin-top:1rem;"></p>
+</div>
+
+<script>
+const BASE_PATH = "/siglife-report";
+
+let pollTimer = null;
+let opPollTimer = null;
+let generatedItemsCache = [];
+
+const TEMPLATE_PHYSICAL = `Почитувани,
+
+Ве информираме дека Друштвото за животно осигурување УНИКА ЛАЈФ АД Скопје,
+од 13.01.2026 година продолжува со работа под нов назив –
+Друштво за животно осигурување СИГАЛ Лајф Иншуренс Груп АД Скопје.
+
+Промената на називот има исклучиво формален и брендинг карактер и нема
+никакво влијание врз важноста и условите на постојните договори за осигурување.
+Сите полиси, договорни услови, висината на премиите, како и начинот на
+сервисирање на клиентите, остануваат целосно непроменети.
+
+Сите договорни односи продолжуваат да важат под истите услови, без потреба
+од дополнителни активности од Ваша страна.
+
+Во рамки на оваа промена, Друштвото спроведува и процес на ребрендирање.
+Новото лого и визуелен идентитет на SIGAL ја отсликуваат довербата и
+долгогодишното искуство изградени со нашите клиенти, надополнети со
+современ изглед и јасна визија за понатамошен раст и развој.
+
+Ви благодариме за довербата.
+
+Со почит,
+СИГАЛ Лајф Иншуренс Груп АД Скопје`;
+
+const TEMPLATE_LEGAL = `Почитувани,
+
+Ве информираме дека Друштвото за животно осигурување УНИКА ЛАЈФ АД Скопје,
+од 13.01.2026 година продолжува со работа под нов назив –
+Друштво за животно осигурување СИГАЛ Лајф Иншуренс Груп АД Скопје.
+
+Промената на називот има исклучиво формален и брендинг карактер и нема
+никакво влијание врз важноста и условите на постојните договори за осигурување.
+Сите полиси, договорни услови, висината на премиите, како и начинот на
+сервисирање на клиентите, остануваат непроменети.
+
+Сите договорни односи продолжуваат да важат под истите услови, без потреба
+од дополнителни усогласувања.
+
+Во рамки на оваа промена, Друштвото спроведува и процес на ребрендирање.
+Новото лого и визуелен идентитет на SIGAL ја отсликуваат довербата и
+долгогодишното искуство изградени со нашите партнери и клиенти, надополнети
+со современ изглед и јасна визија за понатамошен раст и развој.
+
+Во прилог на овој маил Ви доставуваме тековна состојба од друштвото,
+со цел ажурирање на податоците во Вашата евиденција.
+
+Ви благодариме за соработката и довербата.
+
+Со почит,
+СИГАЛ Лајф Иншуренс Груп АД Скопје`;
+
+function setButtonState(id, disabled) {
+  const btn = document.getElementById(id);
+  if (btn) btn.disabled = disabled;
+}
+
+function applyTemplate() {
+  const target = document.getElementById("target_type").value;
+  const bodyEl = document.getElementById("body");
+  const attachEl = document.getElementById("attach_current_state");
+  const attachWrap = document.getElementById("attachCurrentStateWrap");
+
+  if (!bodyEl.value || bodyEl.value.trim().length < 20) {
+    if (target === "legal") {
+      bodyEl.value = TEMPLATE_LEGAL;
+    } else {
+      bodyEl.value = TEMPLATE_PHYSICAL;
+    }
+  }
+
+  if (target === "legal") {
+    attachWrap.style.display = "block";
+    attachEl.checked = true;
+  } else {
+    attachWrap.style.display = "none";
+    attachEl.checked = false;
+  }
+}
+
+async function startSendAsync() {
+  const statusBox = document.getElementById("statusBox");
+  statusBox.innerText = "⏳ Стартувам испраќање известување...";
+  setButtonState("sendNotifBtn", true);
+
+  const form = document.getElementById("notifForm");
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch(`${BASE_PATH}/izvestuvanja/send-async`, {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      statusBox.innerText = "❌ " + (data.error || "Грешка");
+      setButtonState("sendNotifBtn", false);
+      return;
+    }
+
+    const jobId = data.job_id;
+    statusBox.innerText = "▶️ Испраќањето е пуштено. Проверувам статус...";
+
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollSendJob(jobId), 2000);
+
+  } catch (e) {
+    statusBox.innerText = "❌ Грешка при повик: " + e;
+    setButtonState("sendNotifBtn", false);
+  }
+}
+
+async function pollSendJob(jobId) {
+  const statusBox = document.getElementById("statusBox");
+
+  try {
+    const res = await fetch(`${BASE_PATH}/izvestuvanja/job/${jobId}`);
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      const txt = await res.text();
+      statusBox.innerText = "❌ Серверот не врати JSON (можно logout/redirect).";
+      console.log("Non-JSON response:", txt);
+      clearInterval(pollTimer);
+      setButtonState("sendNotifBtn", false);
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      statusBox.innerText = "❌ " + (data.error || "Грешка при читање статус");
+      clearInterval(pollTimer);
+      setButtonState("sendNotifBtn", false);
+      return;
+    }
+
+    if (data.status === "queued" || data.status === "running") {
+      statusBox.innerText = "⏳ Се извршува... (" + data.status + ")";
+      return;
+    }
+
+    clearInterval(pollTimer);
+    setButtonState("sendNotifBtn", false);
+
+    if (data.status === "success") {
+      statusBox.innerText =
+        "✅ " + (data.message || "Успешно испратено.") +
+        (data.sent_count != null ? (" | Испратени: " + data.sent_count) : "") +
+        (data.failed_count != null ? (" | Неуспешни: " + data.failed_count) : "");
+    } else {
+      statusBox.innerText = "❌ " + (data.message || "Грешка при испраќање");
+    }
+
+  } catch (e) {
+    statusBox.innerText = "❌ Грешка при проверка: " + e;
+    clearInterval(pollTimer);
+    setButtonState("sendNotifBtn", false);
+  }
+}
+
+async function startGenerateOpomeniAsync() {
+  const statusBox = document.getElementById("op_statusBox");
+  const dl = document.getElementById("op_download_link");
+  const generatedWrap = document.getElementById("generatedListWrap");
+  const generatedBody = document.getElementById("generatedTableBody");
+  const sendSelectedStatus = document.getElementById("sendSelectedStatus");
+
+  dl.style.display = "none";
+  dl.href = "#";
+
+  generatedItemsCache = [];
+  generatedWrap.style.display = "none";
+  generatedBody.innerHTML = "";
+  sendSelectedStatus.innerText = "";
+
+  statusBox.innerText = "⏳ Стартувам генерирање опомени (PDF)...";
+  setButtonState("genOpomeniBtn", true);
+  setButtonState("genIzviBtn", true);
+
+  const form = document.getElementById("opomeniForm");
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch(`${BASE_PATH}/opomeni/generate-async`, {
+      method: "POST",
+      body: formData
+    });
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      const txt = await res.text();
+      statusBox.innerText = "❌ Серверот не врати JSON.";
+      console.log("Non-JSON response:", txt);
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      statusBox.innerText = "❌ " + (data.error || "Грешка");
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+      return;
+    }
+
+    const jobId = data.job_id;
+    statusBox.innerText = "▶️ Генерирањето е пуштено. Проверувам статус...";
+
+    if (opPollTimer) clearInterval(opPollTimer);
+    opPollTimer = setInterval(() => pollOpomeniJob(jobId), 2000);
+
+  } catch (e) {
+    statusBox.innerText = "❌ Грешка при повик: " + e;
+    setButtonState("genOpomeniBtn", false);
+    setButtonState("genIzviBtn", false);
+  }
+}
+
+async function pollOpomeniJob(jobId) {
+  const statusBox = document.getElementById("op_statusBox");
+  const dl = document.getElementById("op_download_link");
+
+  try {
+    const res = await fetch(`${BASE_PATH}/opomeni/status/${jobId}`);
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+
+    if (!contentType.includes("application/json")) {
+      const txt = await res.text();
+      clearInterval(opPollTimer);
+      statusBox.innerText = "❌ Серверот не врати JSON за статус.";
+      console.log("Status non-JSON response:", txt);
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      clearInterval(opPollTimer);
+      console.log("STATUS ERROR JSON:", data);
+      statusBox.innerText = "❌ " + (data.error || data.message || JSON.stringify(data));
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+      return;
+    }
+
+    if (data.status === "queued" || data.status === "running") {
+      statusBox.innerText = "⏳ " + (data.message || "Се генерира...");
+      return;
+    }
+
+    if (data.status === "ready") {
+      clearInterval(opPollTimer);
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+
+      const downloadUrl = data.file_url;
+      generatedItemsCache = Array.isArray(data.items) ? data.items : [];
+
+      statusBox.innerText =
+        `✅ PDF е подготвен. Генерирани: ${data.generated || 0}, прескокнати: ${data.skipped || 0}, грешки: ${data.errors || 0}`;
+
+      if (downloadUrl) {
+        dl.href = downloadUrl;
+        dl.style.display = "inline-block";
+        dl.innerText = "⬇️ Симни PDF";
+      } else {
+        statusBox.innerText += " | ⚠️ Нема download link од сервер.";
+      }
+
+      renderGeneratedItems(generatedItemsCache);
+      return;
+    }
+
+    if (data.status === "error") {
+      clearInterval(opPollTimer);
+      statusBox.innerText = "❌ " + (data.message || "Грешка при генерирање.");
+      setButtonState("genOpomeniBtn", false);
+      setButtonState("genIzviBtn", false);
+      return;
+    }
+
+    clearInterval(opPollTimer);
+    statusBox.innerText = "⚠️ Непознат статус.";
+    setButtonState("genOpomeniBtn", false);
+    setButtonState("genIzviBtn", false);
+
+  } catch (e) {
+    clearInterval(opPollTimer);
+    statusBox.innerText = "❌ Грешка при проверка на статус: " + e;
+    setButtonState("genOpomeniBtn", false);
+    setButtonState("genIzviBtn", false);
+  }
+}
+
+function renderGeneratedItems(items) {
+  const wrap = document.getElementById("generatedListWrap");
+  const tbody = document.getElementById("generatedTableBody");
+  const selectAll = document.getElementById("selectAllGenerated");
+
+  tbody.innerHTML = "";
+  selectAll.checked = false;
+
+  if (!items || !items.length) {
+    wrap.style.display = "none";
+    return;
+  }
+
+  items.forEach((item) => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td style="border:1px solid #ddd; padding:8px;">
+        <input type="checkbox"
+               class="generated-item-check"
+               value="${escapeHtml(item.id || '')}"
+               ${item.send_ready === false ? 'disabled' : ''}>
+      </td>
+      <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.client_id || '')}</td>
+      <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.client_name || '')}</td>
+      <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.policy_no || '')}</td>
+      <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.email || '')}</td>
+      <td style="border:1px solid #ddd; padding:8px;">
+        ${item.pdf_url ? `<a href="${item.pdf_url}" target="_blank">Преглед</a>` : '-'}
+      </td>
+      <td style="border:1px solid #ddd; padding:8px;">
+        ${item.send_ready === false ? 'Нема email / не е подготвено' : 'Подготвено'}
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  wrap.style.display = "block";
+}
+
+function toggleSelectAllGenerated(master) {
+  const checks = document.querySelectorAll(".generated-item-check:not(:disabled)");
+  checks.forEach(ch => ch.checked = master.checked);
+}
+
+function getSelectedGeneratedIds() {
+  const checks = document.querySelectorAll(".generated-item-check:checked");
+  return Array.from(checks).map(x => x.value).filter(Boolean);
+}
+
+async function sendSelectedGeneratedByMail() {
+
+  const statusEl = document.getElementById("sendSelectedStatus");
+  const selectedIds = getSelectedGeneratedIds();
+
+  const testEmail = document.getElementById("test_email")?.value || null;
+
+  if (!selectedIds.length) {
+    statusEl.innerText = "⚠️ Избери барем еден запис.";
+    return;
+  }
+
+  statusEl.innerText = "⏳ Испраќам селектирани записи по mail...";
+  setButtonState("sendSelectedBtn", true);
+
+  try {
+
+    const res = await fetch(`${BASE_PATH}/opomeni/send-selected-mail`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ids: selectedIds,
+        test_email: testEmail
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      statusEl.innerText = "❌ " + (data.error || "Грешка при испраќање.");
+      setButtonState("sendSelectedBtn", false);
+      return;
+    }
+
+    statusEl.innerText =
+      "✅ " + data.message +
+      " | Испратени: " + data.sent_count +
+      " | Неуспешни: " + data.failed_count;
+
+    setButtonState("sendSelectedBtn", false);
+
+  } catch (e) {
+    statusEl.innerText = "❌ Грешка: " + e;
+    setButtonState("sendSelectedBtn", false);
+  }
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function exportOpomeniExcel() {
+  const statusBox = document.getElementById("op_statusBox");
+  statusBox.innerText = "⏳ Подготвувам Excel...";
+  setButtonState("exportExcelBtn", true);
+
+  const form = document.getElementById("opomeniForm");
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch(`${BASE_PATH}/opomeni/export-excel`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      console.log("Export Excel error response:", txt);
+      statusBox.innerText = "❌ HTTP " + res.status + " | " + (txt.slice(0, 200) || "Грешка");
+      setButtonState("exportExcelBtn", false);
+      return;
+    }
+
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+
+    if (contentType.includes("application/json")) {
+      const data = await res.json();
+      console.log("Export Excel JSON:", data);
+
+      if (!data.ok) {
+        statusBox.innerText = "❌ " + (data.error || "Грешка");
+        setButtonState("exportExcelBtn", false);
+        return;
+      }
+
+      statusBox.innerText = "✅ " + (data.message || "Подготвено.");
+      setButtonState("exportExcelBtn", false);
+      return;
+    }
+
+    if (contentType.includes("text/html")) {
+      const html = await res.text();
+      console.log("Export Excel HTML:", html);
+      statusBox.innerText = "❌ Сервер врати HTML (можно logout/redirect).";
+      setButtonState("exportExcelBtn", false);
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "opomeni.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    statusBox.innerText = "✅ Excel е симнат.";
+    setButtonState("exportExcelBtn", false);
+
+  } catch (e) {
+    console.log("Export Excel exception:", e);
+    statusBox.innerText = "❌ Exception: " + e;
+    setButtonState("exportExcelBtn", false);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", function () {
+  applyTemplate();
+});
+async function exportSentOpomeniExcel() {
+  const statusBox = document.getElementById("op_statusBox");
+  setButtonState("exportSentExcelBtn", true);
+  statusBox.innerText = "⏳ Подготвувам Excel од испратени mail-ови...";
+
+  const form = document.getElementById("opomeniForm");
+  const formData = new FormData();
+  formData.append("date_from", document.getElementById("date_from").value || "");
+  formData.append("date_to", document.getElementById("date_to").value || "");
+
+  try {
+    const res = await fetch(`${BASE_PATH}/opomeni/export-sent-emails-excel`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      statusBox.innerText = "❌ HTTP " + res.status + " | " + (txt.slice(0, 200) || "Грешка");
+      setButtonState("exportSentExcelBtn", false);
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "isprateni_opomeni.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    statusBox.innerText = "✅ Excel е симнат.";
+    setButtonState("exportSentExcelBtn", false);
+
+  } catch (e) {
+    statusBox.innerText = "❌ Грешка: " + e;
+    setButtonState("exportSentExcelBtn", false);
+  }
+}
+
+async function sendViaKibsTest() {
+
+  const statusBox = document.getElementById("op_statusBox");
+  statusBox.innerText = "⏳ Испраќам преку KIBS TEST...";
+
+  const selectedIds = getSelectedGeneratedIds();
+
+  if (!selectedIds.length) {
+    statusBox.innerText = "⚠️ Избери барем еден документ.";
+    return;
+  }
+
+  try {
+
+    const res = await fetch("/siglife-report/opomeni/send-kibs-test", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ids: selectedIds
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      statusBox.innerText = "❌ " + (data.error || "Грешка");
+      return;
+    }
+
+    statusBox.innerText =
+      "✅ Испратено преку KIBS TEST | " +
+      "Успешни: " + data.sent_count +
+      " | Грешки: " + data.failed_count;
+
+  } catch (e) {
+
+    statusBox.innerText = "❌ Грешка: " + e;
+
+  }
+
+}
+</script>
+
+{% endblock %}

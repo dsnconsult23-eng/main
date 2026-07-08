@@ -3,7 +3,99 @@
 {% block title %}АСО извештаи{% endblock %}
 
 {% block content %}
-  <h1>АСО извештаи</h1>
-  <!-- Тука стави ги формите, табелите, и податоците што сакаш да ги прикажеш -->
-{% endblock %}
+<h1>АСО извештаи</h1>
 
+<!-- ========================= -->
+<!-- FORM 1: Reports buttons -->
+<!-- ========================= -->
+<form method="post" style="margin-top: 1rem;">
+
+  <div style="margin-bottom: 1rem;">
+    <label for="month">Избери месец:</label>
+    <select name="month" id="month" required>
+      {% set months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ] %}
+      {% for m in months %}
+        <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="year">Избери година:</label>
+    <select name="year" id="year" required>
+      {% for y in range(2020, 2031) %}
+        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="margin-top: 2rem;">
+    <button type="submit" formaction="/siglife-report/aso/import-si">Генерирај Статистички обрасци</button>
+    <button type="submit" formaction="/siglife-report/aso/gen-excel">Генерирај ексел Статистички обрасци</button>
+    <button type="submit" formaction="/siglife-report/aso/sp1-analitika">СП-1 аналитика</button>
+    <button type="submit" formaction="/siglife-report/aso/sp2-analitika">СП-2 аналитика</button>
+  </div>
+</form>
+
+<!-- ========================= -->
+<!-- FORM 2: Excel upload -->
+<!-- ========================= -->
+<hr style="margin: 2rem 0;">
+
+<h3>⬆️ Внес од Excel во база</h3>
+
+<form method="post"
+      action="/siglife-report/aso/import-excel-all"
+      enctype="multipart/form-data"
+      style="margin-top: 1rem;">
+
+  <div style="margin-bottom: 1rem;">
+    <label for="month_up">Избери месец:</label>
+    <select name="month" id="month_up" required>
+      {% set months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ] %}
+      {% for m in months %}
+        <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="year_up">Избери година:</label>
+    <select name="year" id="year_up" required>
+      {% for y in range(2020, 2031) %}
+        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="excel_file">Избери Excel фајл:</label><br>
+    <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
+  </div>
+
+  <button type="submit" style="background-color:#4CAF50; color:white;">
+    Прикачи Excel и внеси во база
+  </button>
+
+  <button type="submit"
+        formaction="/siglife-report/aso/transfer-to-reporting"
+        style="background-color:#2196F3; color:white;">
+  Пренеси на репортинг сервер
+</button>
+
+</form>
+
+
+{% if result %}
+  <div style="margin-top: 1rem; color: black;">
+    {{ result }}
+  </div>
+{% endif %}
+
+{% endblock %}

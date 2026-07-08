@@ -8,6 +8,9 @@ from reportlab.platypus import Table, TableStyle
 import os
 import sys
 from reportlab.lib.styles import getSampleStyleSheet
+from datetime import datetime
+from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import mm
 
 # Define font paths
 base_path = os.path.dirname(__file__) if '__file__' in globals() else os.path.dirname(sys.argv[0])
@@ -26,50 +29,57 @@ def generate_pdf(filename, client_name, client_adresa, client_grad, polisa_numbe
     c = canvas.Canvas(filename, pagesize=A4)
     width, height = A4
     styles = getSampleStyleSheet()
+    background_image_path = "/opt/siglife-reporting/Image/UNIQA_MEMO1.png"
+    # Draw the background image first
+    if os.path.exists(background_image_path):
+        bg_image = ImageReader(background_image_path)
+        c.drawImage(bg_image, 0, 0, width=width, height=height)
+    today_str = datetime.today().strftime("%d.%m.%Y")
+    due_date_formatted = datetime.strptime(due_date, "%Y-%m-%d").strftime("%d.%m.%Y")
 
     # Header
     c.setFont("DejaVu-Bold", 16)
-    c.drawString(20 * mm, height - 25 * mm, "UNIQA LIFE")
+    #c.drawString(20 * mm, height - 25 * mm, "UNIQA LIFE")
 
     c.setFont("DejaVu", 10)
     c.drawRightString(width - 20 * mm, height - 25 * mm, "Сектор Финансии")
     c.drawRightString(width - 20 * mm, height - 30 * mm, "Телефон: +389 2 3288 820")
     c.drawRightString(width - 20 * mm, height - 35 * mm, "Факс: +389 2 3215 128")
-    c.drawRightString(width - 20 * mm, height - 40 * mm, "E-Mail: uniqalifefininfo@uniqa.mk")
-    c.drawRightString(width - 20 * mm, height - 45 * mm, "Дата: 23/06/2025")
+    c.drawRightString(width - 20 * mm, height - 40 * mm, "E-Mail: lifeinsurance@sigal.com.mk")
+    c.drawRightString(width - 20 * mm, height - 45 * mm, f"Дата: {today_str}")
 
     # Recipient
     y = height - 60 * mm
     c.setFont("DejaVu-Bold", 10)
-    c.drawString(20 * mm, y, "До")
+    c.drawString(10 * mm, y, "До")
     c.setFont("DejaVu", 10)
-    c.drawString(20 * mm, y - 5 * mm, str(client_name))
-    c.drawString(20 * mm, y - 10 * mm, str(client_adresa))
-    c.drawString(20 * mm, y - 15 * mm, str(client_grad))
+    c.drawString(10 * mm, y - 5 * mm, str(client_name))
+    c.drawString(10 * mm, y - 10 * mm, str(client_adresa))
+    c.drawString(10 * mm, y - 15 * mm, str(client_grad))
 
     # Subject
     y -= 25 * mm
     c.setFont("DejaVu-Bold", 10)
-    c.drawString(20 * mm, y, "Предмет:")
-    c.drawString(50 * mm, y, "Известување")
+    c.drawString(10 * mm, y, "Предмет:")
+    c.drawString(40 * mm, y, "Известување")
 
     # Body Text
     y -= 10 * mm
-    text = c.beginText(20 * mm, y)
-    text.setFont("DejaVu-Oblique", 9)
+    text = c.beginText(10 * mm, y)
+    text.setFont("DejaVu", 9)
     message = (
         f"Почитувани,\n\n"
         f"Ве известуваме дека премијата за осигурување на живот по полиса бр. {polisa_number} \n"
-        f"која ја плаќате месечно, доспева на {due_date}.\n\n"
+        f"која ја плаќате месечно, доспева на {due_date_formatted}.\n\n"
         f"Согласно нашата евиденција состојбата на Вашата полиса бр. {polisa_number} на ден "
-        f"23.06.2025 е следна:"
+        f"{today_str} е следна:"
     )
     for line in message.split('\n'):
         text.textLine(line)
     c.drawText(text)
 
     # Table
-    y -= 50 * mm
+    y -= 40 * mm
     draw_premium_table(
         c=c,
         width=width,
@@ -81,23 +91,28 @@ def generate_pdf(filename, client_name, client_adresa, client_grad, polisa_numbe
     )
 
     # Payment Instructions
-    draw_payment_instructions(c, width, start_y=y - 60 * mm, due_date="31.07.2025")
+    draw_payment_instructions(c, width, start_y=y - 60 * mm, due_date=due_date_formatted)
 
     # Footer
     c.setFont("DejaVu-Bold", 10)
-    c.drawString(20 * mm, 30 * mm, "Со почит:")
-    c.drawString(20 * mm, 25 * mm, "UNIQA Life a.d Скопје")
+    c.drawString(10 * mm, 30 * mm, "Со почит:")
+    c.drawString(10 * mm, 25 * mm, "SIGAL Life a.d Скопје")
 
     c.save()
 
 
 def draw_premium_table(c, width, y, rows, unpaid_premium, total_due, currency):
+    print(total_due)
+    print("total_due:", total_due, type(total_due))
+    print("currency:", currency.strip(), type(currency))
+    formatted = f"{total_due:.2f}{' ' + currency.strip() if currency else ''}"
+
     data = [
         ["Година", "Број на рата", "Период", "Премија", "Уплатена премија", "Салдо"],
         ["Премија за тековен период", "", "", "", "", ""]
     ] + rows + [
         ["Неплатена премија за изминат период", "", "", "", "", f"{unpaid_premium:.2f}"],
-        ["", "", "", "", "Вкупно за наплата:", f"{total_due:.2f} {currency}"]
+        ["", "", "", "", "Вкупно за наплата:", f"{formatted}"]
     ]
 
     table = Table(data, colWidths=[25 * mm, 30 * mm, 50 * mm, 25 * mm, 35 * mm, 30 * mm])
@@ -127,6 +142,7 @@ def draw_premium_table(c, width, y, rows, unpaid_premium, total_due, currency):
         ("SPAN", (0, len(rows)+2), (4, len(rows)+2)),
         ("FONTNAME", (0, len(rows)+2), (-1, len(rows)+2), "DejaVu-Bold"),
         ("ALIGN", (5, len(rows)+2), (5, len(rows)+2), "RIGHT"),
+        ("RIGHTPADDING", (5, len(rows)+2), (5, len(rows)+2), 20*mm),
 
         ("SPAN", (0, len(rows)+3), (3, len(rows)+3)),
         ("FONTNAME", (0, len(rows)+3), (-1, len(rows)+3), "DejaVu-Bold"),
@@ -136,19 +152,20 @@ def draw_premium_table(c, width, y, rows, unpaid_premium, total_due, currency):
 
     table.setStyle(TableStyle(table_style))
     table.wrapOn(c, width, y)
-    table.drawOn(c, 20 * mm, y - (row_count + 2) * 10)
+    table.drawOn(c, 10 * mm, y - (row_count + 2) * 10)
 
 
 def draw_payment_instructions(c, width, start_y, due_date):
-    text2 = c.beginText(20 * mm, start_y)
+    text2 = c.beginText(10 * mm, start_y)
     text2.setFont("DejaVu-Oblique", 9)
     instructions = f"""\
 
 Ве молиме вкупната премија за наплата да се уплати најдоцна до {due_date} по денарска противвредност
 по среден курс на НБРМ на денот на уплата на еден од следните жиро сметки:
 
-Стопанска Банка: 200 0023430082 08 Комерцијална Банка: 300 00000300239 83 НЛБ Банка:  210 0671233901 38
-Шпаркасе Банка:  250 1010001676 24 Силк Роуд Банка:    240 7016232997 75  Халк Банка: 270 0671233901 45
+Стопанска Банка: 200 0023430088 02 Комерцијална Банка: 300 0000033029 83  НЛБ Банка:  210 0671233901 38
+Шпаркасе Банка:  250 1010001762 24 Силк Роуд Банка:    280 1001048952 79  Халк Банка: 270 0671233901 45
+
 
 Врз основа на Законот за ДДВ (Сл. весник бр. 44/99, 58/99, 11/2008, 8/2001 и 21/2003) член 23 став 1 точка 6
 премијата на осигурување е ослободена од ДДВ.
@@ -164,7 +181,7 @@ def draw_payment_instructions(c, width, start_y, due_date):
 
 def scheduled_generate_pdf():
     try:
-        save_folder = "C:/Reports/UNIQA"
+        save_folder = "/opt/siglife/reports/UNIQA"
         os.makedirs(save_folder, exist_ok=True)
         full_path = os.path.join(save_folder, "izvesuvanje.pdf")
 

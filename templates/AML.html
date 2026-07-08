@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}AML{% endblock %}
+
+{% block content %}
+<h1>📄Преглед на полиси – AML & Наплата</h1>
+
+<!-- ================== WRAPPER: TWO FORMS SIDE BY SIDE ================== -->
+<div style="display:flex; gap:2rem; align-items:flex-start; margin-top:1rem;">
+
+
+<!-- =======================  FORM 1 – AML  ======================= -->
+<form id="riskForm" 
+      method="post" 
+      action="/siglife-report/AML/export"
+      style="width:50%; display:flex; flex-direction:column; gap:1rem; border:1px solid #ddd; padding:1rem; border-radius:8px;">
+
+  <h2>📄Преглед на полиси – AML</h2>
+
+  <div>
+    <label><strong>Датум на склучување – од:</strong></label>
+    <input type="date" name="date_from">
+  </div>
+
+  <div>
+    <label><strong>Датум на склучување – до:</strong></label>
+    <input type="date" name="date_to">
+  </div>
+
+  <fieldset style="border:1px solid #ccc; padding:1rem;">
+    <legend><strong>Носител на јавна функција (опционално)</strong></legend>
+
+    <label><input type="checkbox" name="important_holder" value="DOG"> Договорувач</label><br>
+    <label><input type="checkbox" name="important_holder" value="OSIG"> Осигуреник</label><br>
+    </fieldset>
+
+  <fieldset style="border:1px solid #ccc; padding:1rem;">
+    <legend><strong>Проценка на ризик </strong></legend>
+
+    <label><input type="checkbox" name="risk_dog" value="N"> Низок</label><br>
+    <label><input type="checkbox" name="risk_dog" value="S"> Среден</label><br>
+    <label><input type="checkbox" name="risk_dog" value="M"> Средно-висок</label><br>
+    <label><input type="checkbox" name="risk_dog" value="V"> Висок</label><br>
+  </fieldset>
+
+  <button type="submit">Експорт</button>
+</form>
+
+
+
+<!-- =======================  FORM 2 – NAPLATA  ======================= -->
+<form id="paymentForm"
+      method="post"
+      action="/siglife-report/naplata/export"
+      style="width:50%; display:flex; flex-direction:column; gap:1rem; border:1px solid #ddd; padding:1rem; border-radius:8px;">
+
+    <h2>💰Преглед на наплата</h2>
+
+    <div>
+        <label><strong>Датум на уплата – од:</strong></label>
+        <input type="date" name="uplata_from" required>
+    </div>
+
+    <div>
+        <label><strong>Датум на уплата – до:</strong></label>
+        <input type="date" name="uplata_to" required>
+    </div>
+
+    <fieldset style="border:1px solid #ccc; padding:1rem;">
+        <legend><strong>Носител на јавна функција (опционално)</strong></legend>
+
+        <label><input type="checkbox" name="important_holder_naplata" value="DOG"> Договорувач</label><br>
+        <label><input type="checkbox" name="important_holder_naplata" value="OSIG"> Осигуреник</label><br>
+        <label><input type="checkbox" name="important_holder_naplata" value="PLAKAC"> Плаќач</label><br>
+      </fieldset>
+
+    <fieldset style="border:1px solid #ccc; padding:1rem;">
+        <legend><strong>Проценка на ризик</strong></legend>
+
+        <label><input type="checkbox" name="risk_naplata" value="N"> Низок</label><br>
+        <label><input type="checkbox" name="risk_naplata" value="S"> Среден</label><br>
+        <label><input type="checkbox" name="risk_naplata" value="M"> Средно-висок</label><br>
+        <label><input type="checkbox" name="risk_naplata" value="V"> Висок</label><br>
+    </fieldset>
+
+    <button type="submit">Експорт</button>
+</form>
+
+
+</div> <!-- END FLEX WRAPPER -->
+
+<!-- NEW AML BUTTONS -->
+<div style="margin-top:1rem; display:flex; gap:1rem;">
+
+  <!-- AML – Физички лица -->
+<button id="btnAmlFizicki" onclick="startAmlFizicki()">
+   AML – Физички лица
+</button>
+
+<div id="amlStatus" style="margin-top:8px; font-weight:600;"></div>
+
+
+  <!-- AML – Правни лица -->
+<form method="post" action="/siglife-report/AML/export-pravni/start" onsubmit="event.preventDefault(); startAmlPravni();">
+  <button type="submit">📥 AML – Правни лица</button>
+</form>
+
+<div id="amlPravniStatus" style="margin-top:8px; font-size:14px;"></div>
+
+
+</div>
+
+
+
+<!-- JS VALIDATIONS -->
+<script>
+  // AML validation
+  document.getElementById("riskForm").addEventListener("submit", function (e) {
+    const selected = document.querySelectorAll('input[name="risk_dog"]:checked');
+
+    if (selected.length < 1) {
+      e.preventDefault();
+      alert("Ве молам изберете барем еден ризик.");
+    }
+  });
+
+  // Naplata validation
+  document.getElementById("paymentForm").addEventListener("submit", function (e) {
+    const from = document.querySelector('input[name="uplata_from"]').value;
+    const to = document.querySelector('input[name="uplata_to"]').value;
+
+    if (!from || !to) {
+      e.preventDefault();
+      alert("Датум на уплата од/до е задолжителен.");
+      return;
+    }
+  });
+  async function startAmlFizicki() {
+  const btn = document.getElementById("btnAmlFizicki");
+  const statusDiv = document.getElementById("amlStatus");
+
+  // UI: start
+  btn.disabled = true;
+  statusDiv.style.color = "#555";
+  statusDiv.innerText = "⏳ Export is running… please wait";
+
+  try {
+    const r = await fetch("/siglife-report/AML/export-fizicki/start", {
+      method: "POST"
+    });
+
+    if (!r.ok) {
+      throw new Error("Failed to start export");
+    }
+
+    const j = await r.json();
+
+    // polling
+    while (true) {
+      const s = await fetch(j.status_url);
+      const st = await s.json();
+
+      if (st.status === "done") {
+        statusDiv.style.color = "green";
+        statusDiv.innerText = "✅ Export completed. Downloading…";
+
+        window.location = j.download_url; // triggers download
+        break;
+      }
+
+      if (st.status === "error") {
+        statusDiv.style.color = "red";
+        statusDiv.innerText = "❌ Export failed";
+
+        alert("Export error: " + (st.error || "unknown error"));
+        break;
+      }
+
+      // still running
+      statusDiv.innerText = "⏳ Export is running… please wait";
+      await new Promise(res => setTimeout(res, 1500));
+    }
+
+  } catch (e) {
+    statusDiv.style.color = "red";
+    statusDiv.innerText = "❌ Cannot start export";
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function startAmlPravni() {
+  const statusEl = document.getElementById("amlPravniStatus");
+  statusEl.textContent = "Running export… please wait.";
+
+  try {
+    const r = await fetch("/siglife-report/AML/export-pravni/start", { method: "POST" });
+    const j = await r.json();
+
+    while (true) {
+      const s = await fetch(j.status_url);
+      const st = await s.json();
+
+      if (st.status === "done") {
+        statusEl.textContent = "Done. Downloading…";
+        window.location = j.download_url;
+        return;
+      }
+      if (st.status === "error") {
+        statusEl.textContent = "Error: " + (st.error || "");
+        alert("Export error: " + (st.error || ""));
+        return;
+      }
+      if (st.status === "not_found") {
+        statusEl.textContent = "Job not found.";
+        return;
+      }
+
+      statusEl.textContent = "Running export…";
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  } catch (e) {
+    statusEl.textContent = "Error: " + (e?.message || e);
+    alert("Export error: " + (e?.message || e));
+  }
+}
+
+
+</script>
+
+{% endblock %}

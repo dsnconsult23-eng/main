@@ -3,32 +3,21 @@
 {% block title %}Математичка резерва{% endblock %}
 
 {% block content %}
-<h1>Математичка резерва – Експорт</h1>
+<h1>📊 Математичка резерва</h1>
 
-<form method="post" action="/MatematickaRezerva/export" style="margin-top: 1rem;">
+<form method="post" action="/siglife-report/MatematickaRezerva/export" style="margin-top: 1rem;">
   <label for="month">Месец:</label>
-  <select name="month" id="month" required>
-    {% for num, name in [
-      ('01','Јануари'), ('02','Февруари'), ('03','Март'), ('04','Април'),
-      ('05','Мај'), ('06','Јуни'), ('07','Јули'), ('08','Август'),
-      ('09','Септември'), ('10','Октомври'), ('11','Ноември'), ('12','Декември') ] %}
-      <option value="{{ num }}" {% if num == month %}selected{% endif %}>{{ name }}</option>
-    {% endfor %}
-  </select>
+  <input type="number" name="month_form" id="month" min="1" max="12" required>
 
   <label for="year">Година:</label>
-  <select name="year" id="year" required>
-    {% for y in range(2020, 2031) %}
-      <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
-    {% endfor %}
+  <input type="number" name="year_form" id="year" min="2000" max="2100" required>
+
+  <label for="format">Формат:</label>
+  <select name="format_form" id="format">
+    <option value="excel">Excel</option>
+    <option value="soap_xml">SOAP XML</option>
   </select>
 
-  <button type="submit" style="margin-left: 1rem;">
-    📥 Активни полиси – Експортирај во Excel
-  </button>
+  <button type="submit">Експорт</button>
 </form>
-
-{% if message %}
-  <p style="margin-top: 1rem;">{{ message }}</p>
-{% endif %}
 {% endblock %}

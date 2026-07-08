@@ -10,6 +10,8 @@ import locale
 import routers.Connection  as Connection # absolute import
 import re
 from datetime import datetime
+from typing import Optional
+
 
 # Function to get local machine's IP address
 def get_ip_address():
@@ -102,12 +104,12 @@ def prebSMS(selected_option):
 
         today_date = datetime.today().strftime("%d.%m.%Y")
         message = (
-            f"Почитуван/а {client_naziv}, вашиот доспеан долг кон Uniqa Life со состојба на {today_date} изнесува {dolg} {valuta}. Ве молиме да ја подмирите премијата."
+            f"Почитуван/а {client_naziv}, вашиот доспеан долг кон Sigal Life со состојба на {today_date} изнесува {dolg} {valuta}. Ве молиме да ја подмирите премијата."
         )
 
         # SMS API parameters
         params = {
-            "from": "UniqaLife",
+            "from": "SigalLife",
             "to": cleaned_number.strip(),
             "message": message,
             "username": credentials["username"],
@@ -126,16 +128,89 @@ def prebSMS(selected_option):
     # Return message with SMS count
     return True, podatoci, f"Испратени се {sent_count} СМС пораки"
 
-def prebSMSRodenden(selected_option):
-    # Set default credentials if IP is not mapped
-    sql = f"""
-    select    par_clientid client_id, trim(desc) client_naziv, 
-    vrati_client_telefon(par_clientid)  from par_client
-    where client_tip_pf='F'
-    and month(datumraganje)=MONTH(today)
-    and day(datumraganje)=day(today)
-    and nvl(edb,'')<>''
-    and nvl(telefon,'')<>''
+def scheduled_prebSMSPromenaIme():
+    return prebSMSPromenaIme(None)
+def scheduled_prebSMSRodenden():
+    # ако твојата функција за роденден има параметар, стави None
+    return prebSMSRodenden(None)
+
+
+
+def log_sms_audit(
+    *,
+    job_id: str,
+    recipient: str,
+    sender: str,
+    message: str,
+    http_status: Optional[int],
+    provider_resp: Optional[str],
+    status: str,
+    error_message: Optional[str],
+):
+    results, OK = Connection.OSISinit()
+    if not OK:
+        print("[AUDIT][DB] ❌ No DB connection")
+        return
+
+    cur = results
+    try:
+        sql = """
+            INSERT INTO sms_audit_log
+                (job_id, recipient, sender, message, http_status, provider_resp, status, error_message, created_at)
+            VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND)
+        """
+
+        cur.execute(sql, (
+            job_id,
+            recipient,
+            sender,
+            message,
+            http_status,
+            (provider_resp or "")[:3500],
+            status,
+            (error_message or "")[:1900],
+        ))
+
+        try:
+            cur.connection.commit()
+        except Exception:
+            pass
+
+    except Exception as e:
+        print("[AUDIT][DB] ❌ Insert failed:", repr(e))
+
+
+
+def prebSMSPromenaIme(selected_option):
+    sql = """
+    SELECT first 1 LOWER(TRIM(telefon)) AS telefon
+   -- SELECT DISTINCT LOWER(TRIM(telefon)) AS telefon
+    FROM (
+        SELECT c.telefon AS telefon
+        FROM os_polisa a
+        JOIN os_ponuda b ON a.os_ponudaid = b.os_ponudaid
+        JOIN par_client c ON b.dogovoruvac_par_client = c.par_clientid
+        WHERE b.par_statusid IN (17,18)
+          AND a.polisa_pod_broj = vratipodbrojpolisa(a.polisa_broj, b.os_produktid)
+          AND c.client_tip_pf = 'F'
+          AND NVL(edb,'') <> ''
+          AND NVL(telefon,'') <> ''
+
+        UNION
+
+        SELECT c.telefon AS telefon
+        FROM os_polisa a
+        JOIN os_ponuda b ON a.os_ponudaid = b.os_ponudaid
+        JOIN par_client c ON b.osigurenik_par_client = c.par_clientid
+        WHERE b.par_statusid IN (17,18)
+          AND a.polisa_pod_broj = vratipodbrojpolisa(a.polisa_broj, b.os_produktid)
+          AND c.client_tip_pf = 'F'
+          AND NVL(edb,'') <> ''
+          AND NVL(telefon,'') <> ''
+    ) t
+    WHERE LOWER(TRIM(telefon)) NOT IN (SELECT recipient FROM sms_audit_log)
+    ORDER BY 1
     """
 
     print(sql)
@@ -144,10 +219,8 @@ def prebSMSRodenden(selected_option):
         print("Грешка - нема врска со база")
         return OK, 0.0, "Грешка - нема врска со база"
 
-    # Execute SQL query and fetch results
     results.execute(sql)
     podatoci = []
-
     while True:
         row = results.fetchone()
         if not row:
@@ -161,57 +234,69 @@ def prebSMSRodenden(selected_option):
 
     sent_count = 0
 
+    # ако имаш job_id однадвор - стави го тој; ако не, направи еден
+    job_id = f"SMS_PROMENA_IME_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    message = (
+        "Pocituvani, Ve informirame deka Drustvoto za osiguruvanje UNIQA LIFE izvrsi promena na naziv "
+        "i vo idnina ke prodolzi da raboti pod imeto SIGAL LIFE INSURANCE GROUP. Vi blagodarime na doverbata."
+    )
+
     for row in podatoci:
-        client_id, client_naziv, phone_number = row
+        phone_number = row[0]  # ✅ само 1 колона
 
-        # Test phone number for debugging
-        #phone_number = "071-297860"
-        #print(f"Testing with phone number: {phone_number}")
+        # ⚠️ ТЕСТ: тргни го ова во продукција
+        phone_number = "071-297860"
 
-        # Skip if the phone number is empty or None
         if not phone_number:
             continue
-        
-        # Clean and format phone number
-        cleaned_number = re.sub(r'\D', '', phone_number)
+
+        cleaned_number = re.sub(r"\D", "", phone_number)
         if cleaned_number.startswith("07"):
             cleaned_number = "389" + cleaned_number[1:]
 
-
-
-        today_date = datetime.today().strftime("%d.%m.%Y")
-        message = (
-            f"Sreken rodenden! Neka sekoj nov den VI donese zdravje, radost i sigurnost na koja mozzete da se potprete. Vash UNIQA LIFE."
-        )
-
-        # SMS API parameters
         params = {
-            "from": "UniqaLife",
+            "from": "SigalLife",
             "to": cleaned_number.strip(),
             "message": message,
             "username": credentials["username"],
             "password": credentials["password"]
         }
 
-        # Send GET request
         try:
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                sent_count += 1  # Increase counter only on successful response
+            response = requests.get(url, params=params, timeout=30)
+
+            ok = (response.status_code == 200)
+            if ok:
+                sent_count += 1
+
             print(f"Sent to {cleaned_number}: {response.status_code} - {response.text}")
+
+            # ✅ log to DB (success or fail)
+            log_sms_audit(
+                job_id=job_id,
+                recipient=cleaned_number.strip(),
+                sender=params["from"],
+                message=message,
+                http_status=response.status_code,
+                provider_resp=response.text,
+                status="SENT" if ok else "FAILED",
+                error_message=None if ok else f"HTTP {response.status_code}"
+            )
+
         except Exception as e:
             print(f"Failed to send to {cleaned_number}: {e}")
 
-    # Return message with SMS count
+            # ✅ log exception to DB
+            log_sms_audit(
+                job_id=job_id,
+                recipient=cleaned_number.strip(),
+                sender=params["from"],
+                message=message,
+                http_status=None,
+                provider_resp=None,
+                status="FAILED",
+                error_message=str(e),
+            )
+
     return True, podatoci, f"Испратени се {sent_count} СМС пораки"
-
-
-def scheduled_prebSMS():
-    print("Scheduled: Sending prebSMS")
-    prebSMS(None)
-
-def scheduled_prebSMSRodenden():
-    print("Scheduled: Sending prebSMSRodenden")
-    prebSMSRodenden(None)
-
-

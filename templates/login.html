@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="mk">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -72,10 +72,12 @@
 <body>
   <div class="login-container">
     <h2>Sign in to SigLifeReporting</h2>
+
     {% if error %}
     <div class="error-message">{{ error }}</div>
     {% endif %}
-    <form method="post" autocomplete="off">
+
+    <form method="post" action="/siglife-report/login" autocomplete="off">
       <label for="username">Username</label>
       <input id="username" type="text" name="username" required autofocus />
 

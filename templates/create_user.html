@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Креирање корисник{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1rem;">👤 Креирање нов корисник</h1>
+
+<div style="max-width: 600px; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.08);">
+
+  {% if error %}
+    <div style="background:#fdecea; color:#c0392b; padding:0.8rem 1rem; border-radius:6px; margin-bottom:1rem;">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  {% if success %}
+    <div style="background:#eafaf1; color:#1e8449; padding:0.8rem 1rem; border-radius:6px; margin-bottom:1rem;">
+      {{ success }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/siglife-report/users/create">
+    <div style="margin-bottom: 1rem;">
+      <label for="username" style="display:block; font-weight:600; margin-bottom:0.4rem;">Email / Username *</label>
+      <input type="email" id="username" name="username" required
+             style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label for="full_name" style="display:block; font-weight:600; margin-bottom:0.4rem;">Име и презиме *</label>
+      <input type="text" id="full_name" name="full_name" required
+             style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label for="role_name" style="display:block; font-weight:600; margin-bottom:0.4rem;">Улога *</label>
+      <select id="role_name" name="role_name"
+              style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+        <option value="admin">admin</option>
+        <option value="aml">aml</option>
+        <option value="izvestuvanja">izvestuvanja</option>
+        <option value="finance">finance</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom: 1.2rem;">
+      <label for="is_active" style="display:block; font-weight:600; margin-bottom:0.4rem;">Активен</label>
+      <select id="is_active" name="is_active"
+              style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+        <option value="1" selected>Да</option>
+        <option value="0">Не</option>
+      </select>
+    </div>
+
+    <button type="submit"
+            style="background:#3498db; color:white; border:none; padding:0.8rem 1.2rem; border-radius:6px; font-weight:600; cursor:pointer;">
+      Креирај корисник и прати mail
+    </button>
+  </form>
+</div>
+{% endblock %}

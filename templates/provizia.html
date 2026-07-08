@@ -4,154 +4,688 @@
 
 {% block content %}
 <style>
-  .panel {
-    background: #eceff1;
-    border-radius: 8px;
-    padding: 1.5rem 2rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-  }
-  .panel.gray    { background: #d0d4d8; }
-  .panel h2      { margin-bottom: 1rem; color:#2c3e50; }
-  .form-row      { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem; }
-  .form-row > *  { flex:1 1 180px; min-width:150px; }
-  .btn-primary   { padding:.5rem 1rem; border:none; border-radius:4px; background:#3498db; color:#fff; cursor:pointer; }
+  .panel { background:#eceff1; border-radius:8px; padding:1.5rem 2rem;
+           margin-bottom:2rem; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
+  .panel.gray { background:#d0d4d8; }
+  .panel h2 { margin-bottom:1rem; color:#2c3e50; }
+  .form-row { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem; }
+  .form-row > * { flex:1 1 180px; min-width:150px; }
+  .btn-primary { padding:.5rem 1rem; border:none; border-radius:4px;
+                 background:#3498db; color:#fff; cursor:pointer; }
   .btn-primary:hover { background:#2980b9; }
-  .result        { margin-top:.8rem; font-weight:600; }
-  input[type="search"] { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
-  select         { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
+  .result { margin-top:.8rem; font-weight:600; }
+  input[type="search"], select { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
 </style>
 
 <div class="panel">
   <h2>Провизија за агенти и промотори</h2>
   <div class="form-row">
-    <select id="monthAg"></select>
-    <select id="yearAg"></select>
+    <select id="monthAg"><option value="">-- Избери месец --</option></select>
+    <select id="yearAg"><option value="">-- Избери година --</option></select>
   </div>
   <div class="form-row">
     <input type="search" id="agentSearch" placeholder="Пребарaj агент…" />
-    <select id="agentSel" size="1"></select>
+    <select id="agentSel" size="1"><option value="">-- Избери агент --</option></select>
   </div>
   <div class="form-row">
-    <select id="regionSel"></select>
-    <select id="teamSel"></select>
+    <select id="regionSel"><option value="">-- Избери регион --</option></select>
+    <select id="teamSel"><option value="">-- Избери тим --</option></select>
   </div>
   <div class="form-row">
     <button class="btn-primary" id="btnGenPdf">Генерирај PDF</button>
     <button class="btn-primary" id="btnMailAll">Прати маил сите</button>
     <button class="btn-primary" id="btnMailResp">Прати маил одговорно лице</button>
   </div>
+  <button class="btn-primary" id="btnDownloadAll">Симни сите PDF</button>
+  <button class="btn-primary" id="btnInkasoAg">Инкасо провизија</button>
+  <button class="btn-primary" id="btnExportExcel">Експорт Excel</button>
+  <button class="btn-primary" id="btnAgentDrvo">Експорт на структура на агенти</button>
+  <button class="btn-primary" id="btnShowTree">Прикажи структура</button>
+  <button class="btn-primary" id="btnGenProv">Генерирај провизија</button>
   <div class="result" id="resultAgents"></div>
 </div>
-
+<!-- NEW PANEL: Agent Tree Visualization -->
+<div class="panel gray">
+  <h2>Структура на агенти (веб визуелизација)</h2>
+  <div id="treeContainer" style="width:100%; height:600px; border:1px solid #ccc;"></div>
+</div>
+<!-- Broker Commission Panel -->
 <div class="panel gray">
   <h2>Провизија за брокери</h2>
   <div class="form-row">
-    <select id="monthBr"></select>
-    <select id="yearBr"></select>
+    <select id="monthBr"><option value="">-- Избери месец --</option></select>
+    <select id="yearBr"><option value="">-- Избери година --</option></select>
   </div>
   <div class="form-row">
-    <select id="brokerSel" style="flex:2 1 400px;"></select>
+    <select id="brokerSel" style="flex:2 1 400px;">
+      <option value="">-- Избери брокер --</option>
+    </select>
   </div>
   <button class="btn-primary" id="btnInkasoBr">Инкасо провизија за брокери</button>
+  <button class="btn-primary" id="btnGenExselBr">Генерирај Ексели за Брокери</button>
+  <button class="btn-primary" id="btnDownloadAllBr">Симни сите ексели за Брокери</button>
+  <button class="btn-primary" id="btnSendMailBr">Прати маил за брокери</button>
   <div class="result" id="resultBrokers"></div>
 </div>
-
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
-const $ = (id) => document.getElementById(id);
-const apiGet  = (url) => fetch(url).then(r => r.json());
-const apiPost = (url, body) => fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+const $ = id => document.getElementById(id);
+const apiGet  = url => fetch(`/siglife-report${url}`).then(r=>r.json());
+const apiPost = (url, body) => fetch(`/siglife-report${url}`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+}).then(r=>r.json());
+
+function addOptions(selectId, items, labelField="value", valueField="value") {
+  const sel = $(selectId);
+  sel.length = 1;
+  items.forEach(i => sel.appendChild(new Option(i[labelField] ?? i.value, i[valueField] ?? i.value)));
+}
 
 async function initStatic() {
-  const [months, years] = await Promise.all([
-    apiGet('/api/months'),
-    apiGet('/api/years')
-  ]);
-  [ 'monthAg','monthBr' ].forEach(id => {
-    months.forEach(m => { const o=document.createElement('option'); o.text=o.value=m; $(id).appendChild(o); });
-  });
-  [ 'yearAg','yearBr' ].forEach(id => {
-    years.forEach(y => { const o=document.createElement('option'); o.text=o.value=y; $(id).appendChild(o); });
-    $(id).value = new Date().getFullYear();
-  });
+  const [months, years] = await Promise.all([apiGet('/api/months'), apiGet('/api/years')]);
+  ['monthAg','monthBr'].forEach(id => addOptions(id, months));
+  ['yearAg','yearBr'].forEach(id => addOptions(id, years));
+}
+
+let agents = [];
+function reloadAgentDropdown(filter='') {
+  const sel = $('agentSel'); sel.length = 1;
+  agents.filter(a => a.name.toLowerCase().includes(filter.toLowerCase()))
+        .forEach(a => sel.appendChild(new Option(`${a.name} (ID: ${a.id})`, a.id)));
 }
 
 async function initDynamic() {
-  const [agents, regions, teams, brokers] = await Promise.all([
-    apiGet('/api/agents'),
-    apiGet('/api/regions'),
-    apiGet('/api/teams'),
-    apiGet('/api/brokers')
+  const [regions, teams, brokers] = await Promise.all([
+    apiGet('/api/regions'), apiGet('/api/teams'), apiGet('/api/brokers')
   ]);
 
-  function reloadAgentDropdown(filter='') {
-    const sel = $('agentSel');
-    sel.innerHTML='';
-    agents
-      .filter(a => a.name.toLowerCase().includes(filter.toLowerCase()))
-      .forEach(a => { const o=document.createElement('option'); o.value=a.id; o.text=a.name + ' (ID: '+a.id+')'; sel.appendChild(o); });
-  }
+  
+  // Load all agents initially
+  agents = await apiGet('/api/agents');
   reloadAgentDropdown();
-  $('agentSearch').addEventListener('input', e => reloadAgentDropdown(e.target.value));
 
-  regions.forEach(r => { const o=document.createElement('option'); o.value=r.id; o.text=r.name + ' (ID: '+r.id+')'; $('regionSel').appendChild(o); });
-  teams.forEach(t => { const o=document.createElement('option'); o.value=t.id; o.text=t.name + ' (ID: '+t.id+')'; $('teamSel').appendChild(o); });
-  brokers.forEach(b => { const o=document.createElement('option'); o.value=b.id; o.text=b.name + ' (ID: '+b.id+')'; $('brokerSel').appendChild(o); });
+  // Search filtering
+  $('agentSearch').addEventListener('input', e =>
+      reloadAgentDropdown(e.target.value)
+  );
+
+  // Region filter
+  $('regionSel').addEventListener('change', async e => {
+      await filterAgents();
+  });
+
+  // Team filter  ★ NEW ★
+  $('teamSel').addEventListener('change', async e => {
+      await filterAgents();
+  });
+
+// --- helper to apply both filters ---
+async function filterAgents() {
+    const regionId = $('regionSel').value;
+    const teamId   = $('teamSel').value;
+
+    let url = '/api/agents';
+    const params = [];
+    if (regionId) params.push(`region_id=${regionId}`);
+    if (teamId)   params.push(`team_id=${teamId}`);
+    if (params.length) url += `?${params.join('&')}`;
+
+    agents = await apiGet(url);
+    reloadAgentDropdown($('agentSearch').value);
 }
 
+// --- inside initDynamic() ---
+
+  // Team filter (NEW)
+  $('teamSel').addEventListener('change', async e => {
+      const teamId = e.target.value;
+      const regionId = $('regionSel').value; // keep region filter if selected
+
+      let url = '/api/agents';
+      const params = [];
+      if (regionId) params.push(`region_id=${regionId}`);
+      if (teamId)   params.push(`team_id=${teamId}`);
+      if (params.length) url += `?${params.join('&')}`;
+
+      agents = await apiGet(url);
+      reloadAgentDropdown($('agentSearch').value);
+  });
+
+  addOptions('regionSel', regions, "name", "id");
+  addOptions('teamSel',   teams,   "name", "id");
+  addOptions('brokerSel', brokers, "name", "broker");
+}
+
+// --- Button actions ---
 $('btnGenPdf').addEventListener('click', async () => {
+  const month = $('monthAg').value;
+  const year  = $('yearAg').value;
+
+  // --- Front-end validation ---
+  if (!month || !year) {
+      alert("Мора да се изберат месец и година!");
+      return;
+  }
+
   const body = {
-    month:  $('monthAg').value,
-    year:   parseInt($('yearAg').value),
-    agent_id: $('agentSel').value || null,
-    region_id: $('regionSel').value || null,
-    team_id: $('teamSel').value || null
+      month: month,
+      year: parseInt(year),
+      agent_id: $('agentSel').value || null,
+      region_id: $('regionSel').value || null,
+      team_id: $('teamSel').value || null
   };
-  const res = await apiPost('/api/generate_pdf', body);
-  $('resultAgents').textContent = res.message;
-  $('resultAgents').style.color = res.success? 'green':'red';
+
+  try {
+    const res = await fetch('/siglife-report/api/generate_pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+        const text = await res.text();  // If error, get text (not JSON)
+        $('resultAgents').textContent = `Грешка: ${text}`;
+        $('resultAgents').style.color = 'red';
+        return;
+    }
+
+    const data = await res.json();
+    $('resultAgents').textContent = data.message;
+    $('resultAgents').style.color = data.success ? 'green' : 'green';
+  } catch (err) {
+    $('resultAgents').textContent = `Грешка: ${err}`;
+    $('resultAgents').style.color = 'red';
+  }
+});
+
+
+$('btnDownloadAll').addEventListener('click', () => {
+  const m = $('monthAg').value, y = $('yearAg').value;
+  if (!m || !y) return alert("Избери месец и година");
+  window.open(`/siglife-report/download_all_pdfs/?month=${m}&year=${y}`, "_blank");
 });
 
 $('btnMailAll').addEventListener('click', async () => {
-  const body = {
-    month:  $('monthAg').value,
-    year:   parseInt($('yearAg').value),
-    agent_id: $('agentSel').value || null,
-    region_id: $('regionSel').value || null,
-    team_id: $('teamSel').value || null
-  };
+  const body = { month:$('monthAg').value, year:parseInt($('yearAg').value)||null,
+                 agent_id:$('agentSel').value||null, region_id:$('regionSel').value||null,
+                 team_id:$('teamSel').value||null };
   const res = await apiPost('/api/mail_all', body);
   $('resultAgents').textContent = res.message;
-  $('resultAgents').style.color = res.success? 'green':'red';
+  $('resultAgents').style.color = res.success ? 'green' : 'red';
 });
 
 $('btnMailResp').addEventListener('click', async () => {
-  const body = {
-    month:  $('monthAg').value,
-    year:   parseInt($('yearAg').value),
-    agent_id: $('agentSel').value || null,
-    region_id: $('regionSel').value || null,
-    team_id: $('teamSel').value || null
-  };
+  const body = { month:$('monthAg').value, year:parseInt($('yearAg').value)||null,
+                 agent_id:$('agentSel').value||null, region_id:$('regionSel').value||null,
+                 team_id:$('teamSel').value||null };
   const res = await apiPost('/api/mail_resp', body);
   $('resultAgents').textContent = res.message;
-  $('resultAgents').style.color = res.success? 'green':'red';
+  $('resultAgents').style.color = res.success ? 'green' : 'red';
 });
+
+$('btnInkasoAg').addEventListener('click', async () => {
+  const agentId = $('agentSel').value;
+
+  if (!agentId) {
+    alert("Избери агент!");
+    return;
+  }
+
+  $('resultAgents').textContent = "⏳ Генерирање во тек...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    // 1️⃣ Start background job
+    const startResp = await fetch('/siglife-report/api/inkaso_agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: parseInt(agentId) })
+    });
+    const startData = await startResp.json();
+    if (!startResp.ok) throw new Error(startData.detail || startData.message);
+
+    $('resultAgents').textContent = startData.message;
+
+    // 2️⃣ Poll for status every 3 seconds
+    const checkStatus = async () => {
+      const statusResp = await fetch(`/siglife-report/api/inkaso_status/${agentId}`);
+      const statusData = await statusResp.json();
+
+      if (statusData.status === "ready") {
+        // 3️⃣ Download file
+        const downloadResp = await fetch(`/siglife-report/api/inkaso_download/${agentId}`);
+        if (!downloadResp.ok) throw new Error(`Грешка при симнување: ${downloadResp.status}`);
+
+        const blob = await downloadResp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Inkaso_${agentId}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        $('resultAgents').textContent = "✅ Excel фајлот е симнат успешно.";
+        $('resultAgents').style.color = "green";
+      } else if (statusData.status === "error") {
+        $('resultAgents').textContent = "❌ Генерирањето на Excel фајлот не успеа.";
+        $('resultAgents').style.color = "red";
+      } else {
+        // still pending → check again
+        setTimeout(checkStatus, 3000);
+      }
+    };
+
+    checkStatus();
+
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+
+// ---------- Export Excel ----------
+$('btnExportExcel').addEventListener('click', async () => {
+  const year = $('yearAg').value;
+  const month = $('monthAg').value;  // month is required
+
+  if (!year || !month) {
+    alert("Мора да внесеш година и месец!");
+    return;
+  }
+
+  $('resultAgents').textContent = "⏳ Генерирање Excel во тек...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const resp = await fetch('/siglife-report/api/exportEksel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        year: parseInt(year), 
+        month: parseInt(month)
+      })
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Грешка ${resp.status}: ${text.slice(0, 200)}`);
+    }
+
+    const blob = await resp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    // Parse filename from Content-Disposition header if provided
+    const disposition = resp.headers.get('Content-Disposition');
+    const match = disposition && disposition.match(/filename="?([^"]+)"?/);
+    a.download = match ? match[1] : `Provizija_${month}_${year}.xlsx`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    $('resultAgents').textContent = "✅ Excel фајлот е симнат успешно.";
+    $('resultAgents').style.color = "green";
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+// ---------- Export Agent Tree ----------
+// ---------- Export Agent Tree ----------
+$('btnAgentDrvo').addEventListener('click', async () => {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  $('resultAgents').textContent = "⏳ Генерирање структура на агенти...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const resp = await fetch(`/siglife-report/api/export_agent_tree?mesec=${mesec}&godina=${godina}`);
+    if (!resp.ok) throw new Error(`Грешка ${resp.status}`);
+
+    const blob = await resp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Struktura_Agenti_${mesec}_${godina}.xlsx`;
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    $('resultAgents').textContent = "✅ Excel фајлот е симнат успешно.";
+    $('resultAgents').style.color = "green";
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+
 
 $('btnInkasoBr').addEventListener('click', async () => {
+  const mesec = $('monthBr').value;
+  const godina = $('yearBr').value;
+  const broker = $('brokerSel').value;
+
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  if (!broker) {
+    alert("Мора да се избере брокер!");
+    return;
+  }
+
   const body = {
-    month: $('monthBr').value,
-    year:  parseInt($('yearBr').value),
-    broker_id: $('brokerSel').value
+    month: mesec,
+    year: parseInt(godina) || null,
+    broker_id: broker
   };
-  const res = await apiPost('/api/inkaso_brokeri', body);
-  $('resultBrokers').textContent = res.message;
-  $('resultBrokers').style.color = res.success? 'green':'red';
+
+  try {
+    const response = await fetch('/siglife-report/api/inkaso_brokeri', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      $('resultBrokers').textContent = "Грешка: " + errorText;
+      $('resultBrokers').style.color = "red";
+      return;
+    }
+
+    // ⬇⬇⬇ ОВА ГО СПАСУВА ФАЈЛОТ!
+    const blob = await response.blob();
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "Inkaso_broker.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    $('resultBrokers').textContent = "Фајлот е успешно преземен!";
+    $('resultBrokers').style.color = "green";
+
+  } catch (err) {
+    $('resultBrokers').textContent = 'Серверска грешка: ' + err;
+    $('resultBrokers').style.color = 'red';
+  }
 });
 
-window.addEventListener('DOMContentLoaded', async () => {
-  await initStatic();
-  await initDynamic();
+
+
+
+// --- Initialize ---
+window.addEventListener('DOMContentLoaded', async () => { await initStatic(); await initDynamic(); });
+
+// --------------------- Agent Tree Visualization ---------------------
+$('btnShowTree').addEventListener('click', async () => {
+    const mesec = $('monthAg').value;
+    const godina = $('yearAg').value;
+    if(!mesec || !godina) return alert("Мора да се изберат месец и година!");
+
+    const res = await fetch(`/siglife-report/api/agent_tree_json?mesec=${mesec}&godina=${godina}`);
+    if(!res.ok) return alert(`Грешка ${res.status}`);
+    const data = await res.json();
+
+    const container = $('treeContainer'); 
+    container.innerHTML = "";
+    const width = container.clientWidth, height = container.clientHeight;
+
+    const svg = d3.select(container).append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(50,50)");
+
+    const treeLayout = d3.tree().size([width - 100, height - 100]);
+
+    // ---- NO ROOT WRAP ----
+    const roots = data; // Array of root agents
+    roots.forEach(rootData => {
+        const root = d3.hierarchy(rootData);
+        root.x0 = width / 2;
+        root.y0 = 0;
+        root.children?.forEach(collapse);
+        update(root);
+    });
+
+    function collapse(d) {
+        if(d.children){
+            d._children = d.children;
+            d._children.forEach(collapse);
+            d.children = null;
+        }
+    }
+
+    function update(source) {
+        const treeData = treeLayout(source);
+        const nodes = treeData.descendants();
+        const links = treeData.links();
+
+        svg.selectAll(".node").remove();
+        svg.selectAll(".link").remove();
+
+        // Links
+        svg.selectAll(".link")
+            .data(links)
+            .enter()
+            .append("path")
+            .attr("class","link")
+            .attr("fill","none")
+            .attr("stroke","#ccc")
+            .attr("stroke-width",2)
+            .attr("d", d3.linkHorizontal().x(d=>d.y).y(d=>d.x));
+
+        // Nodes
+        const node = svg.selectAll(".node")
+            .data(nodes)
+            .enter()
+            .append("g")
+            .attr("class","node")
+            .attr("transform", d=>`translate(${d.y},${d.x})`)
+            .on("click", click);
+
+        node.append("circle")
+            .attr("r", 15)
+            .style("fill", d=> d._children ? "#4caf50" : "#aed581");
+
+        node.append("text")
+            .attr("dy", 4)
+            .attr("x", d => d.children || d._children ? -20 : 20)
+            .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+            .text(d => d.data.name);
+
+        const tooltip = d3.select("body")
+            .append("div")
+            .attr("class","tooltip")
+            .style("opacity",0)
+            .style("position","absolute")
+            .style("background","#fff")
+            .style("border","1px solid #ccc")
+            .style("padding","5px")
+            .style("border-radius","4px");
+
+        node.on("mouseover", function(event,d){
+            tooltip.transition().duration(200).style("opacity",.9);
+            tooltip.html(`Region: ${d.data.Region||""}<br>Filijala: ${d.data.Filijala||""}<br>Team: ${d.data.Team||""}`)
+                   .style("left",(event.pageX+10)+"px")
+                   .style("top",(event.pageY-28)+"px");
+        }).on("mouseout",()=> tooltip.transition().duration(500).style("opacity",0));
+
+        function click(event,d){
+            if(d.children){ d._children = d.children; d.children = null; }
+            else { d.children = d._children; d._children = null; }
+            update(d);
+        }
+    }
 });
+
+$('btnSendMailBr').addEventListener('click', async () => {
+  const mesec = $('monthBr').value;
+  const godina = $('yearBr').value;
+  const broker = $('brokerSel').value;
+
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  $('resultBrokers').textContent = "⏳ Се праќа мејл со прилог...";
+  $('resultBrokers').style.color = "blue";
+
+  try {
+    const res = await fetch("/siglife-report/api/send_mail_broker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: mesec, year: parseInt(godina), broker: broker || null   })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      $('resultBrokers').textContent = data.message || "✅ Мејлот е успешно испратен.";
+      $('resultBrokers').style.color = "green";
+    } else {
+      $('resultBrokers').textContent = data.detail || "❌ Грешка при праќање мејл.";
+      $('resultBrokers').style.color = "red";
+    }
+  } catch (err) {
+    $('resultBrokers').textContent = "❌ Грешка во конекцијата.";
+    $('resultBrokers').style.color = "red";
+    console.error(err);
+  }
+});
+
+$('btnGenExselBr').addEventListener('click', async () => {
+  const month  = $('monthBr').value;
+  const year   = $('yearBr').value;
+  const broker = $('brokerSel').value;
+
+  // --- validation ---
+  if (!month || !year) {
+      alert("Мора да се изберат месец и година!");
+      return;
+  }
+
+  const body = {
+      month: parseInt(month),
+      year: parseInt(year),
+      broker: broker || null
+  };
+
+  // 👉 1) ВЕДНАШ прикажи статус дека почнало
+  $('resultBrokers').textContent = "⏳ Генерирањето започна, ве молиме почекајте...";
+  $('resultBrokers').style.color = "blue";
+
+  try {
+    // 👉 2) API повик
+    const res = await fetch('/siglife-report/api/generate_excels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        $('resultBrokers').textContent = `❌ Грешка: ${text}`;
+        $('resultBrokers').style.color = 'red';
+        return;
+    }
+
+    const data = await res.json();
+
+    // 👉 3) финален статус после завршување
+    $('resultBrokers').textContent = data.message;
+    $('resultBrokers').style.color = data.success ? 'green' : 'red';
+
+  } catch (err) {
+    $('resultBrokers').textContent = `❌ Грешка: ${err}`;
+    $('resultBrokers').style.color = 'red';
+  }
+});
+
+
+
+
+$('btnDownloadAllBr').addEventListener('click', () => {
+  const m = $('monthBr').value;
+  const y = $('yearBr').value;
+
+  if (!m || !y) {
+    alert("Избери месец и година");
+    return;
+  }
+
+  // Отворање нов таб за download
+  window.open(`/siglife-report/download_all_excels?month=${m}&year=${y}`, "_blank");
+});
+
+// ---------- Generate Commission (LONG async job) ----------
+$('btnGenProv').addEventListener('click', async () => {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  $('resultAgents').textContent = "⏳ Пресметката е стартувана...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const startResp = await fetch('/siglife-report/api/prov_promotori', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mesec: mesec, godina: godina })
+    });
+
+    const startData = await startResp.json();
+    const jobId = startData.job_id;
+
+    const checkStatus = async () => {
+      const statusResp = await fetch(`/siglife-report/api/prov_promotori_status/${jobId}`);
+      const statusData = await statusResp.json();
+
+      if (statusData.status === "ready") {
+        $('resultAgents').textContent = "✅ Пресметката е завршена.";
+        $('resultAgents').style.color = "green";
+      } else if (statusData.status === "error") {
+        $('resultAgents').textContent = "❌ Грешка: " + statusData.message;
+        $('resultAgents').style.color = "red";
+      } else {
+        setTimeout(checkStatus, 5000);
+      }
+    };
+
+    checkStatus();
+
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
 </script>
+
+
+
 {% endblock %}
