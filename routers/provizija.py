@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse,Response
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -6,7 +7,11 @@ from io import BytesIO
 import os
 import zipfile
 import shutil
+import tempfile
+import uuid
+import json
 from typing import Optional
+from db_ifx import informix_cursor
 
 import InkasoProvizijaBroker
 from routers import InkasoProvizijaAgent
@@ -14,6 +19,8 @@ import routers.Connection as Connection
 from SendMailAgent import send_email_with_pdf, send_email_with_pdf_odg_lice
 from services.pdf_service import GenerirajPdf
 from routers.SendMailBroker import send_mail_broker,generate_excels_broker
+from auth.role_utils import has_any_role
+from services.ai_excel_insights import generate_commentary, append_commentary_sheet
 import asyncio
 import pandas as pd
 from io import BytesIO
@@ -23,8 +30,48 @@ from fastapi import Request
 import io
 
 
+MONTH_NAMES_MK = {
+    1: "Januari",
+    2: "Fevruari",
+    3: "Mart",
+    4: "April",
+    5: "Maj",
+    6: "Juni",
+    7: "Juli",
+    8: "Avgust",
+    9: "Septemvri",
+    10: "Oktomvri",
+    11: "Noemvri",
+    12: "Dekemvri",
+}
+
+LIFE_VISION_NAME_PARTS = (
+    "LAJF VIZION",
+    "LAJF VISION",
+    "LIFE VISION",
+    "ЛАЈФ ВИЗИОН",
+)
+
 
 router = APIRouter()
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
+
+
+@router.get("/provizia/multilevel-dashboard")
+async def multilevel_dashboard_page(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(
+            status_code=303,
+            detail="Redirect",
+            headers={"Location": "/siglife-report/login"},
+        )
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return templates.TemplateResponse(
+        "multilevel_dashboard.html",
+        {"request": request, "user": user, "active": "provizia"},
+    )
 
 # -----------------------------
 #   Pydantic Models
@@ -33,6 +80,35 @@ router = APIRouter()
 # LONG commission jobs tracking
 # -------------------------------
 prov_jobs = {}
+multilevel_jobs = {}
+
+
+def _multilevel_job_status_path(job_id: str) -> str:
+    return os.path.join(tempfile.gettempdir(), f"multilevel_job_{job_id}.json")
+
+
+def _write_multilevel_job(job_id: str, data: dict):
+    current = multilevel_jobs.get(job_id, {}).copy()
+    current.update(data)
+    multilevel_jobs[job_id] = current
+    with open(_multilevel_job_status_path(job_id), "w", encoding="utf-8") as f:
+        json.dump(current, f)
+
+
+def _read_multilevel_job(job_id: str) -> Optional[dict]:
+    job = multilevel_jobs.get(job_id)
+    if job:
+        return job
+    status_path = _multilevel_job_status_path(job_id)
+    if not os.path.exists(status_path):
+        return None
+    try:
+        with open(status_path, "r", encoding="utf-8") as f:
+            job = json.load(f)
+        multilevel_jobs[job_id] = job
+        return job
+    except Exception:
+        return None
 
 # -------------------------------
 # 🔧 Commission worker (LONG)
@@ -101,6 +177,39 @@ def fetch_query(sql):
     finally:
         cursor.close()
         conn.close()
+
+
+def _safe_download_filename(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in (" ", "-", "_", ".") else "_" for ch in str(value or ""))
+    safe = " ".join(safe.split()).strip(" ._")
+    return safe or "broker"
+
+
+def _get_broker_download_name(broker_id: int) -> str:
+    sql = f"""
+        SELECT TRIM(a.desc)
+        FROM par_client a
+        WHERE a.par_clientid = {int(broker_id)}
+    """
+    rows, ok = fetch_query(sql)
+    if ok and rows:
+        return str(rows[0][0] or "").strip()
+    return str(broker_id)
+
+
+def _is_life_vision_name(value: str) -> bool:
+    normalized = " ".join(str(value or "").upper().split())
+    return any(part in normalized for part in LIFE_VISION_NAME_PARTS)
+
+
+def _is_life_vision_broker(broker_id: int) -> bool:
+    return _is_life_vision_name(_get_broker_download_name(broker_id))
+
+
+def _broker_excel_download_filename(month: int, year: int, broker_id: int) -> str:
+    broker_name = _safe_download_filename(_get_broker_download_name(broker_id))
+    month_name = MONTH_NAMES_MK.get(int(month), str(month).zfill(2))
+    return f"Provizija na brokeri - {broker_name} - {month_name} {year}.xlsx"
 
 # ---------- Static data endpoints ----------
 @router.get("/api/months")
@@ -197,6 +306,7 @@ async def get_brokers():
             "name": r[1]           # текст
         }
         for r in rows
+        if not _is_life_vision_name(r[1])
     ]
 
 
@@ -365,6 +475,12 @@ async def inkaso_brokeri_download(payload: InkasoBrokerRequest):
     try:
         logger.info(f"Request received: {payload}")
 
+        if _is_life_vision_broker(payload.broker_id):
+            raise HTTPException(
+                status_code=400,
+                detail="ЛАЈФ ВИЗИОН е исклучен од книжење, генерирање пресметки и испраќање маил."
+            )
+
         # Run inkaso calculation
         status, msg = InkasoProvizijaBroker.inkaso_prov_brokeri(
             payload.month,
@@ -395,7 +511,7 @@ async def inkaso_brokeri_download(payload: InkasoBrokerRequest):
         return FileResponse(
             path=output_file,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename="Inkaso_broker.xlsx"
+            filename=_broker_excel_download_filename(payload.month, payload.year, payload.broker_id)
         )
 
     except HTTPException:
@@ -500,6 +616,1455 @@ class ExportEkselRequest(BaseModel):
 # -------------------------------
 # Endpoint
 # -------------------------------
+class MultilevelPreglediRequest(BaseModel):
+    month: Optional[int] = Field(None, ge=1, le=12, description="Month")
+    year: Optional[int] = Field(None, ge=2000, description="Year")
+    polisa_broj: Optional[str] = None
+    agent_id: Optional[int] = Field(None, gt=0, description="Agent ID")
+    region_id: Optional[int] = Field(None, gt=0, description="Region ID")
+    team_id: Optional[int] = Field(None, gt=0, description="Team ID")
+
+
+def _sql_text(value: str) -> str:
+    return str(value).replace("'", "''").strip()
+
+
+def _fetch_multilevel_provizija(
+    month: Optional[int],
+    year: Optional[int],
+    polisa_broj: Optional[str] = None,
+    agent_id: Optional[int] = None,
+    region_id: Optional[int] = None,
+    team_id: Optional[int] = None,
+    dashboard_only: bool = False,
+) -> pd.DataFrame:
+    where_clauses = []
+    if month is not None:
+        m_pad = str(month).zfill(2)
+        where_clauses.append(f"mesec IN ('{month}', '{m_pad}')")
+    if year is not None:
+        where_clauses.append(f"godina = '{year}'")
+    if polisa_broj:
+        where_clauses.append(f"polisa_broj = '{_sql_text(polisa_broj)}'")
+    if agent_id:
+        where_clauses.append(f"par_agentid = {agent_id}")
+    if region_id:
+        ref_year = year if year is not None else datetime.now().year
+        ref_month = month if month is not None else datetime.now().month
+        where_clauses.append(f"""
+            par_agentid IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                JOIN par_regionu_filijala f ON p.par_regionu_filijalaid = f.par_regionu_filijalaid
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND f.par_regionuid = {region_id}
+            )
+        """)
+    if team_id:
+        ref_year = year if year is not None else datetime.now().year
+        ref_month = month if month is not None else datetime.now().month
+        where_clauses.append(f"""
+            par_agentid IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND p.par_teamid = {team_id}
+            )
+        """)
+
+    dashboard_columns = """
+            agent_name,
+            polisa_broj,
+            faktura,
+            naplata,
+            iznos_provizija,
+            os_aneks_fakturaid,
+            naplata_fak,
+            par_agentid,
+            nacin_provizija,
+            br_bodovi,
+            mesec
+    """
+    detail_columns = """
+            agent_name,
+            polisa_broj,
+            faktura,
+            tip_knizi,
+            koja_godina,
+            br_rati,
+            rata,
+            naplata,
+            proc_prov,
+            iznos_provizija,
+            os_aneks_fakturaid,
+            naplata_fak,
+            par_agentid,
+            nacin_provizija,
+            provizija,
+            br_bodovi,
+            iznos_bod,
+            par_client,
+            dat_naplata,
+            dogovoruvac_name,
+            skadenca_datum_od,
+            period_osig,
+            skadenca_datum_do,
+            premija_zivot,
+            premija_nezgoda,
+            premija_zdravstveno,
+            premija_tbs,
+            sap_risk_business,
+            mesec,
+            par_yearid,
+            godina,
+            bod,
+            agent_nivo,
+            agent_tim,
+            bod_presmetka
+    """
+    selected_columns = dashboard_columns if dashboard_only else detail_columns
+    sql = f"""
+        SELECT
+            {selected_columns}
+        FROM prov_promotori_tp_ex
+    """
+    if where_clauses:
+        sql += " WHERE " + " AND ".join(where_clauses)
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise Exception("Database connection failed")
+
+    try:
+        print("Executing SQL:", sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        columns = [c[0] for c in cursor.description] if cursor.description else []
+        return pd.DataFrame(rows, columns=columns)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _fetch_report_naplata(
+    month: Optional[int],
+    year: Optional[int],
+    polisa_broj: Optional[str] = None,
+    agent_id: Optional[int] = None,
+    region_id: Optional[int] = None,
+    team_id: Optional[int] = None,
+) -> pd.DataFrame:
+    where_clauses = [
+        "x5.par_tip_kniziid = x0.par_tip_kniziid",
+        "x0.os_polisaid = x2.os_polisaid",
+        "x2.os_ponudaid = x3.os_ponudaid",
+        "x6.fin_izvod_iid = x0.fin_izvod_iid",
+        "x0.datum <= TODAY",
+        "NVL(x0.f_rs, 'R') != 'N'",
+        "x0.par_tip_dokumentid = 285",
+        "x3.broker_par_client IS NULL",
+    ]
+    if month is not None and year is not None:
+        where_clauses.append(f"x0.datum >= MDY({month}, 1, {year})")
+        where_clauses.append(f"x0.datum <= LAST_DAY(MDY({month}, 1, {year}))")
+    elif year is not None:
+        where_clauses.append(f"x0.datum >= MDY(1, 1, {year})")
+        where_clauses.append(f"x0.datum <= MDY(12, 31, {year})")
+    if polisa_broj:
+        where_clauses.append(f"TRIM(x2.polisa_broj_cel) = '{_sql_text(polisa_broj)}'")
+    if agent_id:
+        where_clauses.append(f"x0.par_agent_id = {agent_id}")
+    if region_id:
+        ref_year = year if year is not None else datetime.now().year
+        ref_month = month if month is not None else datetime.now().month
+        where_clauses.append(f"""
+            x0.par_agent_id IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                JOIN par_regionu_filijala f ON p.par_regionu_filijalaid = f.par_regionu_filijalaid
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND f.par_regionuid = {region_id}
+            )
+        """)
+    if team_id:
+        ref_year = year if year is not None else datetime.now().year
+        ref_month = month if month is not None else datetime.now().month
+        where_clauses.append(f"""
+            x0.par_agent_id IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND p.par_teamid = {team_id}
+            )
+        """)
+
+    sql = f"""
+        SELECT
+            x0.fin_stavkaid,
+            x0.datum,
+            CASE
+                WHEN x0.iznos_d != 0 THEN x0.dat_nalog
+                ELSE (
+                    SELECT x11.datum
+                    FROM "viki".fin_izvod_i x10, "viki".fin_izvod_h x11
+                    WHERE x11.fin_izvod_hid = x10.fin_izvod_hid
+                      AND x10.fin_izvod_iid = x0.fin_izvod_iid
+                )
+            END AS datum_knizi,
+            x2.polisa_broj_cel AS polisa,
+            "vesna".vrati_faktura_broj(x0.os_aneks_fakturaid) AS faktura,
+            "vesna".vrati_faktura_brojint(x0.os_aneks_fakturaid) AS fakturaint,
+            x0.os_aneks_fakturaid,
+            x0.par_agent_id,
+            "vesna".vrati_agent_name(x0.par_agent_id) AS agent_naziv,
+            x0.par_filijalaid,
+            "vesna".vrati_filijala_name(x0.par_filijalaid) AS filijala_naziv,
+            x0.par_clientid,
+            "vesna".vrati_client_id(x0.par_clientid) AS client_id,
+            "vesna".vrati_client_name(x0.par_clientid) AS client_naziv,
+            "vesna".vrati_tip_knizi(x5.par_tip_kniziid) AS par_tip_knizi,
+            x0.iznos_d,
+            x0.iznos_d_den,
+            x0.iznos_p,
+            x0.iznos_p_den,
+            x6.desc AS opis,
+            "vesna".vrati_izvod_name_br(x0.fin_izvod_iid) AS izvod_name,
+            "vesna".vrati_izvod_broj(x0.fin_izvod_iid) AS broj_izvod,
+            "vesna".vrati_izvod_datum(x0.fin_izvod_iid) AS datum_izvod
+        FROM "viki".fin_stavka x0,
+             "viki".os_polisa x2,
+             "viki".os_ponuda x3,
+             "viki".par_tip_knizi x5,
+             "viki".fin_izvod_i x6
+    """
+    sql += " WHERE " + " AND ".join(where_clauses)
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise Exception("Database connection failed")
+
+    try:
+        print("Executing SQL:", sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        columns = [c[0] for c in cursor.description] if cursor.description else []
+        return pd.DataFrame(rows, columns=columns)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _fetch_agent_structure(month: int, year: int) -> pd.DataFrame:
+    sql = f"""
+        SELECT
+            a.par_agentid,
+            vrati_agent_name(a.par_agentid) AS agent_name,
+            a.par_nadreden_agentid,
+            vrati_agent_name(a.par_nadreden_agentid) AS nadreden_agent_name,
+            d.desc_mk AS filijala,
+            e.desc_mk AS region,
+            t.desc_mk AS team,
+            pa.email,
+            pa.par_status_aktiven AS aktiven,
+            vrati_agent_pozicija(a.par_agentid, {month}, {year}) AS agent_nivo
+        FROM par_agent_st a
+        LEFT JOIN par_agent_pripadnost b ON a.par_agentid = b.par_agentid
+         AND MDY({month}, 1, {year}) BETWEEN b.datum_od AND NVL(b.datum_do, MDY(12,31,3000))
+        LEFT JOIN par_regionu_filijala c ON b.par_regionu_filijalaid = c.par_regionu_filijalaid
+        LEFT JOIN par_filijala d ON c.par_filijalaid = d.par_filijalaid
+        LEFT JOIN par_regionu e ON c.par_regionuid = e.par_regionuid
+        LEFT JOIN par_team t ON b.par_teamid = t.par_teamid
+        JOIN par_agent pa ON a.par_agentid = pa.par_agentid
+        WHERE MDY({month}, 1, {year}) BETWEEN a.pas_datumod AND NVL(a.pas_datumdo, MDY(12,31,3000))
+    """
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise Exception("Database connection failed")
+
+    try:
+        print("Executing SQL:", sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        columns = [c[0] for c in cursor.description] if cursor.description else []
+        return pd.DataFrame(rows, columns=columns)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _fetch_promotori_zbiren(
+    month: Optional[int],
+    year: Optional[int],
+    agent_id: Optional[int] = None,
+    region_id: Optional[int] = None,
+    team_id: Optional[int] = None,
+) -> pd.DataFrame:
+    where_clauses = []
+    if month is not None:
+        where_clauses.append(f"z.mesec = '{str(month).zfill(2)}'")
+    if year is not None:
+        where_clauses.append(f"vrati_godina(z.par_yearid) = '{year}'")
+    if agent_id:
+        where_clauses.append(f"z.par_agentid = {agent_id}")
+
+    ref_year = year if year is not None else datetime.now().year
+    ref_month = month if month is not None else datetime.now().month
+    if region_id:
+        where_clauses.append(f"""
+            z.par_agentid IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                JOIN par_regionu_filijala f ON p.par_regionu_filijalaid = f.par_regionu_filijalaid
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND f.par_regionuid = {region_id}
+            )
+        """)
+    if team_id:
+        where_clauses.append(f"""
+            z.par_agentid IN (
+                SELECT p.par_agentid
+                FROM par_agent_pripadnost p
+                WHERE MDY({ref_month}, 1, {ref_year}) BETWEEN p.datum_od AND NVL(p.datum_do, MDY(12,31,3000))
+                  AND p.par_teamid = {team_id}
+            )
+        """)
+
+    sql = """
+        SELECT
+            z.mesec,
+            vrati_godina(z.par_yearid) godina,
+            z.par_agentid,
+            vrati_agent_name(z.par_agentid) agent_name,
+            z.bodovi_licna_prod,
+            z.novi_polisi_prov_lp,
+            z.bodovi_timska_prod,
+            z.novi_polisi_prov_tp,
+            z.bodovi_sl_pozicija_lp,
+            z.bodovi_sl_pozicija_tp,
+            z.storno_polisi_prov_lp,
+            z.novi_storno_bodovi_lp,
+            z.storno_polisi_prov_tp,
+            z.novi_storno_bodovi_tp,
+            z.bodovi_period,
+            z.novi_polisi_prov,
+            z.novi_storno_bodovi,
+            z.storno_polisi_prov,
+            z.bruto_provizija,
+            z.novi_polisi_inkaso_lp,
+            z.novi_polisi_inkaso_tp,
+            z.novi_inkaso_prov,
+            z.rolling_vk,
+            z.bonus_inkaso_prov
+        FROM provizija_promotori_zbiren z
+    """
+    if where_clauses:
+        sql += " WHERE " + " AND ".join(where_clauses)
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise Exception("Database connection failed")
+
+    try:
+        print("Executing SQL:", sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        columns = [c[0] for c in cursor.description] if cursor.description else []
+        return pd.DataFrame(rows, columns=columns)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _fetch_dosegasni_bodovi(
+    month: int,
+    year: int,
+    polisa_broj: Optional[str] = None,
+    agent_id: Optional[int] = None,
+) -> pd.DataFrame:
+    month_str = str(month).zfill(2)
+    bodovi_filter = ""
+    provizija_filter = ""
+    if agent_id:
+        bodovi_filter += f"\n              AND par_agentid = {agent_id}"
+        provizija_filter += f"\n              AND par_agentid = {agent_id}"
+    if polisa_broj:
+        polisa = _sql_text(polisa_broj)
+        bodovi_filter += f"\n              AND TRIM(vrati_polisa(os_polisaid)) = '{polisa}'"
+        provizija_filter += f"\n              AND TRIM(polisa_broj) = '{polisa}'"
+    sql = f"""
+        SELECT
+            par_agentid,
+            '1' tip_produkcija,
+            mesec,
+            godina,
+            SUM(bodovi_tekoven_mesec_l) bodovi_tekoven_mesec_l,
+            SUM(iznos_bodovi_tekoven_mesec_l) iznos_bodovi_tekoven_mesec_l,
+            SUM(bodovi_tekoven_mesec_t) bodovi_tekoven_mesec_t,
+            SUM(iznos_bodovi_tekoven_mesec_t) iznos_bodovi_tekoven_mesec_t,
+            SUM(provizija_tekoven_mesec_l) provizija_tekoven_mesec_l,
+            SUM(provizija_tekoven_mesec_t) provizija_tekoven_mesec_t
+        FROM (
+            SELECT
+                par_agentid,
+                tip_produkcija,
+                mesec,
+                vrati_godina(par_yearid) godina,
+                SUM(br_bodovi) bodovi_tekoven_mesec_l,
+                SUM(iznos_bod) iznos_bodovi_tekoven_mesec_l,
+                0 bodovi_tekoven_mesec_t,
+                0 iznos_bodovi_tekoven_mesec_t,
+                0 provizija_tekoven_mesec_l,
+                0 provizija_tekoven_mesec_t
+            FROM provizija_promotori_bodovi
+            WHERE tip_produkcija = 1
+              AND mesec = '{month_str}'
+              AND vrati_godina(par_yearid) = '{year}'
+              {bodovi_filter}
+            GROUP BY 1,2,3,4
+
+            UNION ALL
+
+            SELECT
+                par_agentid,
+                tip_produkcija,
+                mesec,
+                vrati_godina(par_yearid) godina,
+                SUM(br_bodovi),
+                SUM(iznos_bod),
+                0,
+                0,
+                0,
+                0
+            FROM lc_provizija_agent_bodovi
+            WHERE tip_produkcija = 1
+              AND par_statusid = 1
+              AND mesec = '{month_str}'
+              AND vrati_godina(par_yearid) = '{year}'
+              {bodovi_filter}
+            GROUP BY 1,2,3,4
+
+            UNION ALL
+
+            SELECT
+                par_agentid,
+                tip_produkcija,
+                mesec,
+                vrati_godina(par_yearid) godina,
+                0,
+                0,
+                SUM(br_bodovi) bodovi_tekoven_mesec_t,
+                SUM(iznos_bod) iznos_bodovi_tekoven_mesec_t,
+                0,
+                0
+            FROM provizija_promotori_bodovi
+            WHERE tip_produkcija = 2
+              AND mesec = '{month_str}'
+              AND vrati_godina(par_yearid) = '{year}'
+              {bodovi_filter}
+            GROUP BY 1,2,3,4
+
+            UNION ALL
+
+            SELECT
+                par_agentid,
+                tip_produkcija,
+                mesec,
+                vrati_godina(par_yearid) godina,
+                0,
+                0,
+                SUM(br_bodovi),
+                SUM(iznos_bod),
+                0,
+                0
+            FROM lc_provizija_agent_bodovi
+            WHERE tip_produkcija = 2
+              AND par_statusid = 1
+              AND mesec = '{month_str}'
+              AND vrati_godina(par_yearid) = '{year}'
+              {bodovi_filter}
+            GROUP BY 1,2,3,4
+
+            UNION ALL
+
+            SELECT
+                par_agentid,
+                '1' tip_produkcija,
+                mesec,
+                godina,
+                0,
+                0,
+                0,
+                0,
+                SUM(iznos_provizija) provizija_tekoven_mesec_l,
+                0
+            FROM agenti_provizija1
+            WHERE tip_provizija = 'Лична'
+              AND mesec = '{month_str}'
+              AND godina = '{year}'
+              {provizija_filter}
+            GROUP BY 1,2,3,4
+
+            UNION ALL
+
+            SELECT
+                par_agentid,
+                '2' tip_produkcija,
+                mesec,
+                godina,
+                0,
+                0,
+                0,
+                0,
+                0,
+                SUM(iznos_provizija) provizija_tekoven_mesec_t
+            FROM agenti_provizija1
+            WHERE tip_provizija = 'Тимска'
+              AND mesec = '{month_str}'
+              AND godina = '{year}'
+              {provizija_filter}
+            GROUP BY 1,2,3,4
+        ) x
+        GROUP BY 1,2,3,4
+    """
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise Exception("Database connection failed")
+
+    try:
+        print("Executing SQL:", sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        columns = [c[0] for c in cursor.description] if cursor.description else []
+        return pd.DataFrame(rows, columns=columns)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _find_col(df: pd.DataFrame, name: str) -> Optional[str]:
+    wanted = name.lower()
+    for col in df.columns:
+        if str(col).lower() == wanted:
+            return col
+    return None
+
+
+def _series_text(df: pd.DataFrame, name: str) -> pd.Series:
+    col = _find_col(df, name)
+    if col is None:
+        return pd.Series([""] * len(df), index=df.index)
+    return df[col].fillna("").astype(str).str.strip()
+
+
+def _series_num(df: pd.DataFrame, name: str) -> pd.Series:
+    col = _find_col(df, name)
+    if col is None:
+        return pd.Series([0] * len(df), index=df.index)
+    return pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+
+def _write_sheet(writer, df: pd.DataFrame, sheet_name: str):
+    df.to_excel(writer, index=False, sheet_name=sheet_name)
+    worksheet = writer.sheets[sheet_name]
+    workbook = writer.book
+    header_fmt = workbook.add_format({
+        "bold": True,
+        "font_color": "white",
+        "bg_color": "#176B5D",
+        "border": 1
+    })
+    alert_fmt = workbook.add_format({
+        "bg_color": "#FFE2E2",
+        "font_color": "#9C0006",
+        "border": 1
+    })
+
+    for col_idx, col_name in enumerate(df.columns):
+        worksheet.write(0, col_idx, col_name, header_fmt)
+        values = df[col_name].fillna("").astype(str).head(300).tolist() if not df.empty else []
+        max_len = max([len(str(col_name))] + [len(v) for v in values])
+        worksheet.set_column(col_idx, col_idx, min(max(max_len + 2, 12), 42))
+
+    if sheet_name in ("Kontrola_Dupli", "Negativno_Saldo", "Sporedba_Fakturi", "Sporedba_Bodovi", "Nepresmetani_Fakturi") and len(df) > 0:
+        worksheet.conditional_format(
+            1, 0, len(df), max(len(df.columns) - 1, 0),
+            {"type": "no_errors", "format": alert_fmt}
+        )
+
+    worksheet.freeze_panes(1, 0)
+    worksheet.autofilter(0, 0, len(df), max(len(df.columns) - 1, 0))
+
+
+def _build_grid_results(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the legacy SQL-grid layout used by the monthly prov_*.xls report."""
+    source = df.copy()
+    source_by_name = {str(col).lower(): col for col in source.columns}
+
+    def text_column(name: str) -> pd.Series:
+        column = source_by_name.get(name.lower())
+        if column is None:
+            return pd.Series([""] * len(source), index=source.index, dtype="object")
+        return source[column].fillna("").astype(str)
+
+    tip_provizija = text_column("tip_provizija")
+    if tip_provizija.str.strip().eq("").all():
+        tip_provizija = text_column("nacin_provizija")
+
+    control_key = (
+        text_column("agent_name").str.strip()
+        + text_column("polisa_broj").str.strip()
+        + text_column("faktura").str.strip()
+        + text_column("tip_knizi").str.strip()
+        + tip_provizija.str.strip()
+        + text_column("provizija").str.strip()
+    )
+
+    grid_columns = [
+        "agent_name", "polisa_broj", "faktura", "tip_knizi", "koja_godina",
+        "br_rati", "rata", "naplata", "proc_prov", "iznos_provizija",
+        "os_aneks_fakturaid", "naplata_fak", "par_agentid", "tip_provizija",
+        "provizija", "br_bodovi", "iznos_bod", "par_client", "dat_naplata",
+        "dogovoruvac_name", "skadenca_datum_od", "period_osig",
+        "skadenca_datum_do", "premija_zivot", "premija_nezgoda",
+        "premija_zdravstveno", "premija_tbs", "sap_risk_business", "mesec",
+        "par_yearid", "godina", "bod",
+    ]
+
+    result = pd.DataFrame(index=source.index)
+    result["контрола за дупли"] = control_key
+    for name in grid_columns:
+        if name == "tip_provizija":
+            result[name] = tip_provizija
+        else:
+            column = source_by_name.get(name.lower())
+            result[name] = source[column] if column is not None else ""
+    return result
+
+
+def _build_multilevel_workbook(
+    df: pd.DataFrame,
+    naplata_df: pd.DataFrame,
+    agent_structure_df: pd.DataFrame,
+    dosegasni_bodovi_df: pd.DataFrame,
+    zbiren_df: pd.DataFrame,
+    month: Optional[int],
+    year: Optional[int]
+) -> BytesIO:
+    work = df.copy()
+    grid_results = _build_grid_results(df)
+    work["_par_agentid"] = _series_text(work, "par_agentid")
+    work["_agent_name"] = _series_text(work, "agent_name")
+    work["_polisa_broj"] = _series_text(work, "polisa_broj")
+    work["_faktura"] = _series_text(work, "faktura")
+    work["_os_aneks_fakturaid"] = _series_text(work, "os_aneks_fakturaid")
+    work["_rata"] = _series_text(work, "rata")
+    work["_nacin_provizija"] = _series_text(work, "nacin_provizija")
+    if work["_nacin_provizija"].eq("").all():
+        work["_nacin_provizija"] = _series_text(work, "tip_provizija")
+    work["_dogovoruvac_name"] = _series_text(work, "dogovoruvac_name")
+    work["_iznos_provizija"] = _series_num(work, "iznos_provizija")
+    work["_br_bodovi"] = _series_num(work, "br_bodovi")
+    work["_iznos_bod"] = _series_num(work, "iznos_bod")
+    work["_naplata"] = _series_num(work, "naplata")
+    work["_faktura_key"] = work["_faktura"].str.upper()
+    work["_sporedba_key"] = work["_os_aneks_fakturaid"].where(
+        work["_os_aneks_fakturaid"] != "",
+        work["_faktura_key"],
+    )
+
+    agent_zbiren = work.groupby(["_par_agentid", "_agent_name"], dropna=False).agg(
+        broj_polisi=("_polisa_broj", "nunique"),
+        broj_zapisi=("_polisa_broj", "size"),
+        vkupno_bodovi=("_br_bodovi", "sum"),
+    ).reset_index().rename(columns={"_par_agentid": "par_agentid", "_agent_name": "agent_name"})
+    licna = work[work["_nacin_provizija"] == "Лична"].groupby("_par_agentid")["_iznos_provizija"].sum()
+    timska = work[work["_nacin_provizija"] == "Тимска"].groupby("_par_agentid")["_iznos_provizija"].sum()
+    agent_zbiren["licna_provizija"] = agent_zbiren["par_agentid"].map(licna).fillna(0)
+    agent_zbiren["timska_provizija"] = agent_zbiren["par_agentid"].map(timska).fillna(0)
+    agent_zbiren["vkupna_provizija"] = agent_zbiren["licna_provizija"] + agent_zbiren["timska_provizija"]
+
+    current_bodovi = work.assign(
+        _is_licna=work["_nacin_provizija"].str.contains("Лична|Licna", case=False, na=False),
+        _is_timska=work["_nacin_provizija"].str.contains("Тимска|Timska", case=False, na=False),
+    )
+    current_bodovi = current_bodovi.groupby(["_par_agentid"], dropna=False).agg(
+        tekovno_bodovi_l=("_br_bodovi", lambda s: s[current_bodovi.loc[s.index, "_is_licna"]].sum()),
+        tekovno_iznos_bodovi_l=("_iznos_bod", lambda s: s[current_bodovi.loc[s.index, "_is_licna"]].sum()),
+        tekovno_bodovi_t=("_br_bodovi", lambda s: s[current_bodovi.loc[s.index, "_is_timska"]].sum()),
+        tekovno_iznos_bodovi_t=("_iznos_bod", lambda s: s[current_bodovi.loc[s.index, "_is_timska"]].sum()),
+        tekovno_provizija_l=("_iznos_provizija", lambda s: s[current_bodovi.loc[s.index, "_is_licna"]].sum()),
+        tekovno_provizija_t=("_iznos_provizija", lambda s: s[current_bodovi.loc[s.index, "_is_timska"]].sum()),
+    ).reset_index().rename(columns={"_par_agentid": "par_agentid"})
+
+    dosegasni_work = dosegasni_bodovi_df.copy()
+    if not dosegasni_work.empty:
+        dosegasni_work.columns = [str(c).lower() for c in dosegasni_work.columns]
+        dosegasni_work["par_agentid"] = _series_text(dosegasni_work, "par_agentid")
+        for col in [
+            "bodovi_tekoven_mesec_l", "iznos_bodovi_tekoven_mesec_l",
+            "bodovi_tekoven_mesec_t", "iznos_bodovi_tekoven_mesec_t",
+            "provizija_tekoven_mesec_l", "provizija_tekoven_mesec_t"
+        ]:
+            dosegasni_work[col] = _series_num(dosegasni_work, col)
+    else:
+        dosegasni_work = pd.DataFrame(columns=[
+            "par_agentid", "bodovi_tekoven_mesec_l", "iznos_bodovi_tekoven_mesec_l",
+            "bodovi_tekoven_mesec_t", "iznos_bodovi_tekoven_mesec_t",
+            "provizija_tekoven_mesec_l", "provizija_tekoven_mesec_t"
+        ])
+
+    sporedba_bodovi = current_bodovi.merge(
+        dosegasni_work,
+        on="par_agentid",
+        how="outer",
+    )
+    for col in [
+        "tekovno_bodovi_l", "tekovno_iznos_bodovi_l", "tekovno_bodovi_t", "tekovno_iznos_bodovi_t",
+        "tekovno_provizija_l", "tekovno_provizija_t",
+        "bodovi_tekoven_mesec_l", "iznos_bodovi_tekoven_mesec_l",
+        "bodovi_tekoven_mesec_t", "iznos_bodovi_tekoven_mesec_t",
+        "provizija_tekoven_mesec_l", "provizija_tekoven_mesec_t"
+    ]:
+        sporedba_bodovi[col] = pd.to_numeric(sporedba_bodovi[col], errors="coerce").fillna(0)
+
+    agent_names = work.groupby("_par_agentid")["_agent_name"].first()
+    sporedba_bodovi["agent_name"] = sporedba_bodovi["par_agentid"].map(agent_names).fillna("")
+    sporedba_bodovi["diff_bodovi_l"] = sporedba_bodovi["tekovno_bodovi_l"] - sporedba_bodovi["bodovi_tekoven_mesec_l"]
+    sporedba_bodovi["diff_iznos_bodovi_l"] = sporedba_bodovi["tekovno_iznos_bodovi_l"] - sporedba_bodovi["iznos_bodovi_tekoven_mesec_l"]
+    sporedba_bodovi["diff_bodovi_t"] = sporedba_bodovi["tekovno_bodovi_t"] - sporedba_bodovi["bodovi_tekoven_mesec_t"]
+    sporedba_bodovi["diff_iznos_bodovi_t"] = sporedba_bodovi["tekovno_iznos_bodovi_t"] - sporedba_bodovi["iznos_bodovi_tekoven_mesec_t"]
+    sporedba_bodovi["diff_provizija_l"] = sporedba_bodovi["tekovno_provizija_l"] - sporedba_bodovi["provizija_tekoven_mesec_l"]
+    sporedba_bodovi["diff_provizija_t"] = sporedba_bodovi["tekovno_provizija_t"] - sporedba_bodovi["provizija_tekoven_mesec_t"]
+    diff_cols = ["diff_bodovi_l", "diff_iznos_bodovi_l", "diff_bodovi_t", "diff_iznos_bodovi_t", "diff_provizija_l", "diff_provizija_t"]
+    sporedba_bodovi["status_sporedba"] = sporedba_bodovi[diff_cols].abs().gt(0.01).any(axis=1).map({True: "RAZLIKA", False: "OK"})
+    sporedba_bodovi = sporedba_bodovi[[
+        "status_sporedba", "par_agentid", "agent_name",
+        "tekovno_bodovi_l", "bodovi_tekoven_mesec_l", "diff_bodovi_l",
+        "tekovno_iznos_bodovi_l", "iznos_bodovi_tekoven_mesec_l", "diff_iznos_bodovi_l",
+        "tekovno_bodovi_t", "bodovi_tekoven_mesec_t", "diff_bodovi_t",
+        "tekovno_iznos_bodovi_t", "iznos_bodovi_tekoven_mesec_t", "diff_iznos_bodovi_t",
+        "tekovno_provizija_l", "provizija_tekoven_mesec_l", "diff_provizija_l",
+        "tekovno_provizija_t", "provizija_tekoven_mesec_t", "diff_provizija_t",
+    ]]
+    neusoglaseni_bodovi = sporedba_bodovi[sporedba_bodovi["status_sporedba"] != "OK"].copy()
+    if month is None or year is None:
+        sporedba_bodovi = pd.DataFrame(columns=[
+            "status_sporedba", "par_agentid", "agent_name",
+            "tekovno_bodovi_l", "bodovi_tekoven_mesec_l", "diff_bodovi_l",
+            "tekovno_iznos_bodovi_l", "iznos_bodovi_tekoven_mesec_l", "diff_iznos_bodovi_l",
+            "tekovno_bodovi_t", "bodovi_tekoven_mesec_t", "diff_bodovi_t",
+            "tekovno_iznos_bodovi_t", "iznos_bodovi_tekoven_mesec_t", "diff_iznos_bodovi_t",
+            "tekovno_provizija_l", "provizija_tekoven_mesec_l", "diff_provizija_l",
+            "tekovno_provizija_t", "provizija_tekoven_mesec_t", "diff_provizija_t",
+        ])
+        neusoglaseni_bodovi = sporedba_bodovi.copy()
+
+    polisa_zbiren = work.groupby(
+        ["_polisa_broj", "_dogovoruvac_name", "_faktura", "_os_aneks_fakturaid", "_rata"],
+        dropna=False
+    ).agg(
+        broj_agenti=("_par_agentid", "nunique"),
+        broj_zapisi=("_par_agentid", "size"),
+        vk_naplata=("_naplata", "sum"),
+    ).reset_index().rename(columns={
+        "_polisa_broj": "polisa_broj",
+        "_dogovoruvac_name": "dogovoruvac_name",
+        "_faktura": "faktura",
+        "_os_aneks_fakturaid": "os_aneks_fakturaid",
+        "_rata": "rata",
+    })
+
+    naplata_work = naplata_df.copy()
+    if not naplata_work.empty:
+        naplata_work["_polisa"] = _series_text(naplata_work, "polisa")
+        naplata_work["_faktura"] = _series_text(naplata_work, "faktura")
+        naplata_work["_os_aneks_fakturaid"] = _series_text(naplata_work, "os_aneks_fakturaid")
+        naplata_work["_faktura_key"] = naplata_work["_faktura"].str.upper()
+        naplata_work["_sporedba_key"] = naplata_work["_os_aneks_fakturaid"].where(
+            naplata_work["_os_aneks_fakturaid"] != "",
+            naplata_work["_faktura_key"],
+        )
+        naplata_work["_client_naziv"] = _series_text(naplata_work, "client_naziv")
+        naplata_work["_agent_naziv"] = _series_text(naplata_work, "agent_naziv")
+        naplata_work["_iznos_p"] = _series_num(naplata_work, "iznos_p")
+        naplata_work["_iznos_p_den"] = _series_num(naplata_work, "iznos_p_den")
+        naplata_work["_iznos_d"] = _series_num(naplata_work, "iznos_d")
+        naplata_work["_iznos_d_den"] = _series_num(naplata_work, "iznos_d_den")
+
+        naplata_zbiren = naplata_work.groupby(["_polisa", "_faktura", "_os_aneks_fakturaid", "_sporedba_key"], dropna=False).agg(
+            client_naziv=("_client_naziv", "first"),
+            agent_naziv=("_agent_naziv", "first"),
+            broj_naplati=("_sporedba_key", "size"),
+            vk_iznos_p=("_iznos_p", "sum"),
+            vk_iznos_p_den=("_iznos_p_den", "sum"),
+            vk_iznos_d=("_iznos_d", "sum"),
+            vk_iznos_d_den=("_iznos_d_den", "sum"),
+        ).reset_index().rename(columns={
+            "_polisa": "polisa",
+            "_faktura": "faktura",
+            "_os_aneks_fakturaid": "os_aneks_fakturaid",
+        })
+        naplata_po_polisa = naplata_work.groupby(["_polisa"], dropna=False).agg(
+            broj_fakturi=("_faktura", "nunique"),
+            broj_aneksi=("_os_aneks_fakturaid", "nunique"),
+            broj_naplati=("_polisa", "size"),
+            client_naziv=("_client_naziv", "first"),
+            agent_naziv=("_agent_naziv", "first"),
+            vk_iznos_p=("_iznos_p", "sum"),
+            vk_iznos_p_den=("_iznos_p_den", "sum"),
+            vk_iznos_d=("_iznos_d", "sum"),
+            vk_iznos_d_den=("_iznos_d_den", "sum"),
+        ).reset_index().rename(columns={"_polisa": "polisa"})
+    else:
+        naplata_zbiren = pd.DataFrame(columns=[
+            "polisa", "faktura", "os_aneks_fakturaid", "_sporedba_key", "client_naziv", "agent_naziv",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den"
+        ])
+        naplata_po_polisa = pd.DataFrame(columns=[
+            "polisa", "broj_fakturi", "broj_aneksi", "broj_naplati", "client_naziv", "agent_naziv",
+            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den"
+        ])
+
+    presmetka_fakturi_work = work[work["_sporedba_key"] != ""]
+    presmetani_fakturi = presmetka_fakturi_work.groupby("_sporedba_key", dropna=False).agg(
+        presmetka_polisa=("_polisa_broj", "first"),
+        presmetka_faktura=("_faktura", "first"),
+        presmetka_os_aneks_fakturaid=("_os_aneks_fakturaid", "first"),
+        broj_presmetki=("_sporedba_key", "size"),
+        broj_agenti=("_par_agentid", "nunique"),
+        presmetana_provizija=("_iznos_provizija", "sum"),
+        presmetana_naplata=("_naplata", "sum"),
+    ).reset_index()
+
+    sporedba_fakturi = naplata_zbiren.merge(
+        presmetani_fakturi,
+        on="_sporedba_key",
+        how="outer",
+        indicator=True,
+    )
+    if not sporedba_fakturi.empty:
+        for col in ["broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+                    "broj_presmetki", "broj_agenti", "presmetana_provizija", "presmetana_naplata"]:
+            sporedba_fakturi[col] = pd.to_numeric(sporedba_fakturi[col], errors="coerce").fillna(0)
+
+        sporedba_fakturi["faktura_sporedba"] = sporedba_fakturi["faktura"].fillna(sporedba_fakturi["presmetka_faktura"])
+        sporedba_fakturi["polisa_sporedba"] = sporedba_fakturi["polisa"].fillna(sporedba_fakturi["presmetka_polisa"])
+        sporedba_fakturi["os_aneks_fakturaid_sporedba"] = sporedba_fakturi["os_aneks_fakturaid"].fillna(
+            sporedba_fakturi["presmetka_os_aneks_fakturaid"]
+        )
+        sporedba_fakturi["razlika_naplata"] = sporedba_fakturi["vk_iznos_p"] - sporedba_fakturi["presmetana_naplata"]
+        sporedba_fakturi["presmetana"] = sporedba_fakturi["broj_presmetki"].gt(0).map({True: "DA", False: "NE"})
+        sporedba_fakturi["ima_naplata"] = sporedba_fakturi["broj_naplati"].gt(0).map({True: "DA", False: "NE"})
+
+        sporedba_fakturi["status_sporedba"] = "OK"
+        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "left_only", "status_sporedba"] = "NAPLATENA_NE_PRESMETANA"
+        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "right_only", "status_sporedba"] = "PRESMETANA_NE_NAPLATENA"
+        sporedba_fakturi.loc[
+            (sporedba_fakturi["_merge"] == "both") & (sporedba_fakturi["razlika_naplata"].abs() > 0.01),
+            "status_sporedba"
+        ] = "RAZLIKA_NAPLATA"
+
+        sporedba_fakturi["komentar"] = sporedba_fakturi["status_sporedba"].map({
+            "OK": "naplata i presmetka se poklopuvaat po os_aneks_fakturaid/faktura",
+            "NAPLATENA_NE_PRESMETANA": "naplatena faktura ne e pronajdena vo prov_promotori_tp_ex",
+            "PRESMETANA_NE_NAPLATENA": "presmetana faktura ne e pronajdena vo naplata",
+            "RAZLIKA_NAPLATA": "postoi razlika pomegju naplata i presmetana naplata"
+        })
+        sporedba_fakturi = sporedba_fakturi[[
+            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ]]
+        kontrola_fakturi = sporedba_fakturi[sporedba_fakturi["ima_naplata"] == "DA"].copy()
+    else:
+        sporedba_fakturi = pd.DataFrame(columns=[
+            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ])
+        kontrola_fakturi = pd.DataFrame(columns=[
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv", "broj_naplati",
+            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ])
+
+    nepresmetani_fakturi = kontrola_fakturi[kontrola_fakturi["presmetana"] == "NE"].copy() if "presmetana" in kontrola_fakturi.columns else kontrola_fakturi.copy()
+    neusoglaseni_fakturi = sporedba_fakturi[sporedba_fakturi["status_sporedba"] != "OK"].copy() if "status_sporedba" in sporedba_fakturi.columns else sporedba_fakturi.copy()
+
+    zbirna_provizija = zbiren_df.copy()
+    if not zbirna_provizija.empty:
+        zbirna_provizija.columns = [str(c).lower() for c in zbirna_provizija.columns]
+        zbirna_provizija["_par_agentid"] = _series_text(zbirna_provizija, "par_agentid")
+        for col in ["bodovi_period", "novi_polisi_prov", "bruto_provizija", "novi_inkaso_prov", "bonus_inkaso_prov"]:
+            zbirna_provizija[col] = _series_num(zbirna_provizija, col)
+        zbirna_agent = zbirna_provizija.groupby("_par_agentid", dropna=False).agg(
+            z_bodovi_period=("bodovi_period", "sum"),
+            z_novi_polisi_prov=("novi_polisi_prov", "sum"),
+            z_bruto_provizija=("bruto_provizija", "sum"),
+            z_novi_inkaso_prov=("novi_inkaso_prov", "sum"),
+            z_bonus_inkaso_prov=("bonus_inkaso_prov", "sum"),
+        ).reset_index().rename(columns={"_par_agentid": "par_agentid"})
+        sporedba_zbirna = agent_zbiren.merge(zbirna_agent, on="par_agentid", how="outer")
+        for col in ["vkupno_bodovi", "vkupna_provizija", "z_bodovi_period", "z_bruto_provizija"]:
+            sporedba_zbirna[col] = pd.to_numeric(sporedba_zbirna[col], errors="coerce").fillna(0)
+        sporedba_zbirna["diff_bodovi"] = sporedba_zbirna["vkupno_bodovi"] - sporedba_zbirna["z_bodovi_period"]
+        sporedba_zbirna["diff_provizija"] = sporedba_zbirna["vkupna_provizija"] - sporedba_zbirna["z_bruto_provizija"]
+        sporedba_zbirna["status_sporedba"] = (
+            sporedba_zbirna[["diff_bodovi", "diff_provizija"]].abs().gt(0.01).any(axis=1)
+            .map({True: "RAZLIKA", False: "OK"})
+        )
+    else:
+        zbirna_provizija = pd.DataFrame()
+        sporedba_zbirna = pd.DataFrame(columns=[
+            "status_sporedba", "par_agentid", "agent_name", "vkupno_bodovi", "z_bodovi_period",
+            "diff_bodovi", "vkupna_provizija", "z_bruto_provizija", "diff_provizija"
+        ])
+    neusoglaseni_zbirna = sporedba_zbirna[sporedba_zbirna["status_sporedba"] != "OK"].copy() if "status_sporedba" in sporedba_zbirna.columns else sporedba_zbirna.copy()
+
+    dup_key = ["_par_agentid", "_polisa_broj", "_faktura", "_os_aneks_fakturaid", "_nacin_provizija", "_iznos_provizija"]
+    dup_counts = work.groupby(dup_key, dropna=False).size().reset_index(name="broj_dupli")
+    dup_counts = dup_counts[dup_counts["broj_dupli"] > 1]
+    kontrola_dupli = work.merge(dup_counts, on=dup_key, how="inner")
+    kontrola_dupli["komentar"] = "same agent/policy/faktura/aneks/type/amount"
+    kontrola_dupli = kontrola_dupli.drop(columns=[c for c in kontrola_dupli.columns if c.startswith("_")])
+
+    if not dup_counts.empty:
+        negativno_saldo = work.merge(dup_counts, on=dup_key, how="inner")
+        negativno_saldo = negativno_saldo.groupby(dup_key, dropna=False).agg(
+            agent_name=("_agent_name", "first"),
+            presmetana_provizija=("_iznos_provizija", "first"),
+            isplatena_provizija=("_iznos_provizija", "sum"),
+            broj_dupli=("_iznos_provizija", "size"),
+        ).reset_index()
+        negativno_saldo["saldo"] = negativno_saldo["presmetana_provizija"] - negativno_saldo["isplatena_provizija"]
+        negativno_saldo["komentar"] = "duplicate commission posting"
+        negativno_saldo = negativno_saldo.rename(columns={
+            "_par_agentid": "par_agentid",
+            "_polisa_broj": "polisa_broj",
+            "_faktura": "faktura",
+            "_os_aneks_fakturaid": "os_aneks_fakturaid",
+            "_nacin_provizija": "nacin_provizija",
+            "_iznos_provizija": "iznos_provizija",
+        })
+    else:
+        negativno_saldo = pd.DataFrame(columns=[
+            "par_agentid", "agent_name", "polisa_broj", "faktura", "os_aneks_fakturaid",
+            "nacin_provizija", "presmetana_provizija", "isplatena_provizija", "saldo", "komentar"
+        ])
+
+    struktura = agent_zbiren[["par_agentid", "agent_name", "licna_provizija", "timska_provizija", "vkupna_provizija"]].copy()
+    structure_work = agent_structure_df.copy()
+    if not structure_work.empty:
+        structure_work.columns = [str(c).lower() for c in structure_work.columns]
+        structure_work["_par_agentid"] = _series_text(structure_work, "par_agentid")
+        structure_cols = [
+            "_par_agentid", "par_nadreden_agentid", "nadreden_agent_name",
+            "region", "filijala", "team", "email", "aktiven", "agent_nivo"
+        ]
+        structure_work = structure_work[[c for c in structure_cols if c in structure_work.columns]]
+        structure_work = structure_work.drop_duplicates(subset=["_par_agentid"])
+        struktura = struktura.merge(
+            structure_work,
+            left_on="par_agentid",
+            right_on="_par_agentid",
+            how="left",
+        ).drop(columns=["_par_agentid"], errors="ignore")
+    else:
+        struktura.insert(2, "par_nadreden_agentid", "")
+        struktura.insert(3, "nadreden_agent_name", "")
+        struktura.insert(4, "region", "")
+        struktura.insert(5, "filijala", "")
+        struktura.insert(6, "team", "")
+        struktura.insert(7, "email", "")
+        struktura.insert(8, "aktiven", "")
+        struktura.insert(9, "agent_nivo", "")
+
+    summary = pd.DataFrame([
+        ["Period", f"{str(month).zfill(2)}/{year}" if month is not None and year is not None else str(year) if year is not None else "ALL"],
+        ["Source", "prov_promotori_tp_ex"],
+        ["Detail rows", len(df)],
+        ["Agents count", work["_par_agentid"].nunique()],
+        ["Policies count", work["_polisa_broj"].nunique()],
+        ["Total personal commission", agent_zbiren["licna_provizija"].sum() if not agent_zbiren.empty else 0],
+        ["Total team commission", agent_zbiren["timska_provizija"].sum() if not agent_zbiren.empty else 0],
+        ["Total commission", agent_zbiren["vkupna_provizija"].sum() if not agent_zbiren.empty else 0],
+        ["Naplata rows", len(naplata_df)],
+        ["Naplata fakturi", len(naplata_zbiren)],
+        ["Nepresmetani naplateni fakturi", len(nepresmetani_fakturi)],
+        ["Neusoglaseni fakturi", len(neusoglaseni_fakturi)],
+        ["Neusoglaseni bodovi", len(neusoglaseni_bodovi)],
+        ["Neusoglaseni zbirna provizija", len(neusoglaseni_zbirna)],
+        ["Duplicate groups", len(dup_counts)],
+        ["Rows in duplicate groups", len(kontrola_dupli)],
+        ["Negative balances", len(negativno_saldo)],
+    ], columns=["Metric", "Value"])
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        _write_sheet(writer, grid_results, "Grid Results")
+        _write_sheet(writer, summary, "Summary")
+        _write_sheet(writer, agent_zbiren, "Agent_Zbiren")
+        _write_sheet(writer, zbirna_provizija, "Zbirna_Provizija")
+        _write_sheet(writer, sporedba_zbirna, "Sporedba_Zbirna")
+        _write_sheet(writer, polisa_zbiren, "Polisa_Zbiren")
+        _write_sheet(writer, naplata_po_polisa, "Naplata_Po_Polisa")
+        _write_sheet(writer, naplata_zbiren.drop(columns=["_sporedba_key"], errors="ignore"), "Naplata_Zbiren")
+        _write_sheet(writer, kontrola_fakturi, "Kontrola_Fakturi")
+        _write_sheet(writer, sporedba_fakturi, "Sporedba_Fakturi")
+        _write_sheet(writer, sporedba_bodovi, "Sporedba_Bodovi")
+        _write_sheet(writer, dosegasni_bodovi_df, "Dosegasni_Bodovi")
+        _write_sheet(writer, nepresmetani_fakturi, "Nepresmetani_Fakturi")
+        _write_sheet(writer, df, "Detalno")
+        _write_sheet(writer, naplata_df, "Naplata_Detalno")
+        _write_sheet(writer, kontrola_dupli, "Kontrola_Dupli")
+        _write_sheet(writer, negativno_saldo, "Negativno_Saldo")
+        _write_sheet(writer, struktura, "Struktura")
+    output.seek(0)
+
+    try:
+        period = f"{str(month).zfill(2)}/{year}" if month is not None and year is not None else str(year) if year is not None else "ALL"
+        commentary = generate_commentary(
+            summary.to_dict("records"),
+            context=f"Multilevel извештај за провизии на агенти, период {period}",
+        )
+        output = append_commentary_sheet(output, commentary)
+    except Exception:
+        logger.exception("AI commentary generation failed for multilevel workbook; continuing without it")
+
+    return output
+
+
+def _build_zbiren_workbook(
+    zbiren_df: pd.DataFrame,
+    agent_structure_df: pd.DataFrame,
+    month: Optional[int],
+    year: Optional[int]
+) -> BytesIO:
+    work = zbiren_df.copy()
+    work.columns = [str(c).lower() for c in work.columns]
+    work["_par_agentid"] = _series_text(work, "par_agentid")
+    work["_agent_name"] = _series_text(work, "agent_name")
+
+    for col in [
+        "bodovi_licna_prod", "novi_polisi_prov_lp", "bodovi_timska_prod", "novi_polisi_prov_tp",
+        "bodovi_sl_pozicija_lp", "bodovi_sl_pozicija_tp", "bodovi_period", "novi_polisi_prov",
+        "bruto_provizija", "novi_inkaso_prov", "bonus_inkaso_prov", "rolling_vk"
+    ]:
+        work[col] = _series_num(work, col)
+
+    agent_zbiren = work.groupby(["_par_agentid", "_agent_name"], dropna=False).agg(
+        bodovi_licna_prod=("bodovi_licna_prod", "sum"),
+        novi_polisi_prov_lp=("novi_polisi_prov_lp", "sum"),
+        bodovi_timska_prod=("bodovi_timska_prod", "sum"),
+        novi_polisi_prov_tp=("novi_polisi_prov_tp", "sum"),
+        bodovi_period=("bodovi_period", "sum"),
+        novi_polisi_prov=("novi_polisi_prov", "sum"),
+        bruto_provizija=("bruto_provizija", "sum"),
+        novi_inkaso_prov=("novi_inkaso_prov", "sum"),
+        bonus_inkaso_prov=("bonus_inkaso_prov", "sum"),
+        rolling_vk=("rolling_vk", "sum"),
+    ).reset_index().rename(columns={"_par_agentid": "par_agentid", "_agent_name": "agent_name"})
+
+    detalno = work.drop(columns=[c for c in work.columns if c.startswith("_")], errors="ignore")
+
+    polisa_zbiren = pd.DataFrame([{
+        "komentar": "provizija_promotori_zbiren e agregat po agent/mesec i nema polisa/faktura nivo. Za polisa detal izberi konkretna polisa vo filterot.",
+        "source": "provizija_promotori_zbiren",
+        "broj_zapisi": len(work),
+        "broj_agenti": work["_par_agentid"].nunique(),
+        "vkupno_bodovi": agent_zbiren["bodovi_period"].sum() if not agent_zbiren.empty else 0,
+        "vkupno_bruto_provizija": agent_zbiren["bruto_provizija"].sum() if not agent_zbiren.empty else 0,
+    }])
+
+    dup_key = ["mesec", "godina", "par_agentid"]
+    dup_source = work[[c for c in dup_key if c in work.columns]].copy()
+    if len(dup_source.columns) == len(dup_key):
+        dup_counts = dup_source.groupby(dup_key, dropna=False).size().reset_index(name="broj_dupli")
+        dup_counts = dup_counts[dup_counts["broj_dupli"] > 1]
+        kontrola_dupli = detalno.merge(dup_counts, on=dup_key, how="inner") if not dup_counts.empty else pd.DataFrame(columns=list(detalno.columns) + ["broj_dupli", "komentar"])
+        if not kontrola_dupli.empty:
+            kontrola_dupli["komentar"] = "duplicate row for same mesec/godina/agent in provizija_promotori_zbiren"
+    else:
+        kontrola_dupli = pd.DataFrame(columns=list(detalno.columns) + ["broj_dupli", "komentar"])
+
+    negativno_cols = [
+        "bodovi_licna_prod", "novi_polisi_prov_lp", "bodovi_timska_prod", "novi_polisi_prov_tp",
+        "bodovi_period", "novi_polisi_prov", "bruto_provizija", "novi_inkaso_prov", "bonus_inkaso_prov"
+    ]
+    existing_neg_cols = [c for c in negativno_cols if c in work.columns]
+    if existing_neg_cols:
+        neg_mask = work[existing_neg_cols].lt(0).any(axis=1)
+        negativno_saldo = detalno.loc[neg_mask].copy()
+        if not negativno_saldo.empty:
+            negativno_saldo["komentar"] = "negative value in zbiren control column"
+    else:
+        negativno_saldo = pd.DataFrame(columns=list(detalno.columns) + ["komentar"])
+
+    struktura = agent_zbiren[["par_agentid", "agent_name", "bruto_provizija", "novi_inkaso_prov", "bodovi_period"]].copy()
+    structure_work = agent_structure_df.copy()
+    if not structure_work.empty:
+        structure_work.columns = [str(c).lower() for c in structure_work.columns]
+        structure_work["_par_agentid"] = _series_text(structure_work, "par_agentid")
+        structure_cols = [
+            "_par_agentid", "par_nadreden_agentid", "nadreden_agent_name",
+            "region", "filijala", "team", "email", "aktiven", "agent_nivo"
+        ]
+        structure_work = structure_work[[c for c in structure_cols if c in structure_work.columns]]
+        structure_work = structure_work.drop_duplicates(subset=["_par_agentid"])
+        struktura = struktura.merge(
+            structure_work,
+            left_on="par_agentid",
+            right_on="_par_agentid",
+            how="left",
+        ).drop(columns=["_par_agentid"], errors="ignore")
+
+    summary = pd.DataFrame([
+        ["Period", f"{str(month).zfill(2)}/{year}" if month is not None and year is not None else str(year) if year is not None else "ALL"],
+        ["Source", "provizija_promotori_zbiren"],
+        ["Rows", len(work)],
+        ["Agents count", work["_par_agentid"].nunique()],
+        ["Total points", agent_zbiren["bodovi_period"].sum() if not agent_zbiren.empty else 0],
+        ["Total new policy commission", agent_zbiren["novi_polisi_prov"].sum() if not agent_zbiren.empty else 0],
+        ["Total gross commission", agent_zbiren["bruto_provizija"].sum() if not agent_zbiren.empty else 0],
+        ["Total inkaso commission", agent_zbiren["novi_inkaso_prov"].sum() if not agent_zbiren.empty else 0],
+        ["Total bonus inkaso", agent_zbiren["bonus_inkaso_prov"].sum() if not agent_zbiren.empty else 0],
+        ["Duplicate groups", len(kontrola_dupli)],
+        ["Negative balance rows", len(negativno_saldo)],
+    ], columns=["Metric", "Value"])
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        _write_sheet(writer, summary, "Summary")
+        _write_sheet(writer, agent_zbiren, "Agent_Zbiren")
+        _write_sheet(writer, polisa_zbiren, "Polisa_Zbiren")
+        _write_sheet(writer, detalno, "Detalno")
+        _write_sheet(writer, kontrola_dupli, "Kontrola_Dupli")
+        _write_sheet(writer, negativno_saldo, "Negativno_Saldo")
+        _write_sheet(writer, struktura, "Struktura")
+    output.seek(0)
+    return output
+
+
+def _validate_multilevel_payload(payload: MultilevelPreglediRequest) -> bool:
+    has_period = payload.month is not None and payload.year is not None
+    if payload.month is not None and payload.year is None:
+        raise HTTPException(status_code=400, detail="Year must be provided when month is selected.")
+    if payload.year is None and not payload.polisa_broj and not payload.agent_id:
+        raise HTTPException(status_code=400, detail="Provide year, polisa_broj, or agent_id.")
+    return has_period
+
+
+def _multilevel_filename(payload: MultilevelPreglediRequest, has_period: bool) -> str:
+    filename_parts = ["multilevel_pregledi"]
+    if has_period:
+        filename_parts.extend([str(payload.month).zfill(2), str(payload.year)])
+    elif payload.year is not None:
+        filename_parts.append(str(payload.year))
+    if payload.polisa_broj:
+        filename_parts.append(_sql_text(payload.polisa_broj).replace("/", "_").replace("\\", "_"))
+    if payload.agent_id:
+        filename_parts.append(f"agent_{payload.agent_id}")
+    return "_".join(filename_parts) + ".xlsx"
+
+
+def _generate_multilevel_file(payload: MultilevelPreglediRequest) -> tuple[str, str]:
+    has_period = _validate_multilevel_payload(payload)
+    now = datetime.now()
+    structure_year = payload.year if payload.year is not None else now.year
+    structure_month = payload.month if payload.month is not None else now.month if structure_year == now.year else 12
+    agent_structure_df = _fetch_agent_structure(structure_month, structure_year)
+
+    df = _fetch_multilevel_provizija(
+        payload.month,
+        payload.year,
+        payload.polisa_broj,
+        payload.agent_id,
+        payload.region_id,
+        payload.team_id,
+    )
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No data for selected filters.")
+
+    naplata_df = _fetch_report_naplata(
+        payload.month,
+        payload.year,
+        payload.polisa_broj,
+        payload.agent_id,
+        payload.region_id,
+        payload.team_id,
+    )
+    dosegasni_bodovi_df = (
+        _fetch_dosegasni_bodovi(payload.month, payload.year, payload.polisa_broj, payload.agent_id)
+        if has_period
+        else pd.DataFrame()
+    )
+    zbiren_df = _fetch_promotori_zbiren(
+        payload.month,
+        payload.year,
+        payload.agent_id,
+        payload.region_id,
+        payload.team_id,
+    ) if not payload.polisa_broj else pd.DataFrame()
+    output = _build_multilevel_workbook(
+        df,
+        naplata_df,
+        agent_structure_df,
+        dosegasni_bodovi_df,
+        zbiren_df,
+        payload.month,
+        payload.year
+    )
+    filename = _multilevel_filename(payload, has_period)
+    file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}_{filename}")
+    with open(file_path, "wb") as f:
+        f.write(output.getvalue())
+    return file_path, filename
+
+
+def run_multilevel_job(job_id: str, payload: MultilevelPreglediRequest):
+    try:
+        _write_multilevel_job(job_id, {"status": "running", "message": "Running"})
+        file_path, filename = _generate_multilevel_file(payload)
+        _write_multilevel_job(job_id, {
+            "status": "ready",
+            "file_path": file_path,
+            "filename": filename,
+            "message": "OK",
+        })
+    except HTTPException as e:
+        _write_multilevel_job(job_id, {
+            "status": "error",
+            "message": str(e.detail),
+        })
+    except Exception as e:
+        _write_multilevel_job(job_id, {
+            "status": "error",
+            "message": str(e),
+        })
+
+
+@router.post("/api/multilevel-pregledi")
+async def multilevel_pregledi(payload: MultilevelPreglediRequest, background_tasks: BackgroundTasks):
+    try:
+        _validate_multilevel_payload(payload)
+        job_id = uuid.uuid4().hex
+        _write_multilevel_job(job_id, {
+            "status": "pending",
+            "message": "Started",
+            "file_path": None,
+            "filename": None,
+        })
+        background_tasks.add_task(run_multilevel_job, job_id, payload)
+        return {
+            "success": True,
+            "job_id": job_id,
+            "status": "pending",
+            "message": "Multilevel export started.",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating multilevel reports: {e}")
+
+
+@router.get("/api/multilevel-pregledi/status/{job_id}")
+async def multilevel_pregledi_status(job_id: str):
+    job = _read_multilevel_job(job_id)
+    if not job:
+        return {"status": "unknown", "message": "No job found."}
+    return {
+        "status": job.get("status"),
+        "message": job.get("message"),
+        "filename": job.get("filename"),
+    }
+
+
+@router.get("/api/multilevel-pregledi/download/{job_id}")
+async def multilevel_pregledi_download(job_id: str):
+    job = _read_multilevel_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="No job found.")
+    if job.get("status") != "ready":
+        raise HTTPException(status_code=409, detail="File is not ready yet.")
+    file_path = job.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Generated file not found.")
+    return FileResponse(
+        path=file_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=job.get("filename") or "multilevel_pregledi.xlsx",
+    )
+
+
+@router.post("/api/multilevel-dashboard")
+def multilevel_dashboard(payload: MultilevelPreglediRequest):
+    try:
+        _validate_multilevel_payload(payload)
+        df = _fetch_multilevel_provizija(
+            payload.month,
+            payload.year,
+            payload.polisa_broj,
+            payload.agent_id,
+            payload.region_id,
+            payload.team_id,
+            dashboard_only=True,
+        )
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data for selected filters.")
+
+        work = df.copy()
+        work["_par_agentid"] = _series_text(work, "par_agentid")
+        work["_agent_name"] = _series_text(work, "agent_name")
+        work["_polisa_broj"] = _series_text(work, "polisa_broj")
+        work["_faktura"] = _series_text(work, "faktura")
+        work["_mesec"] = _series_text(work, "mesec")
+        work["_nacin_provizija"] = _series_text(work, "nacin_provizija")
+        work["_iznos_provizija"] = _series_num(work, "iznos_provizija")
+        work["_br_bodovi"] = _series_num(work, "br_bodovi")
+        work["_naplata"] = _series_num(work, "naplata")
+        work["_naplata_fak"] = _series_num(work, "naplata_fak")
+        work["_os_aneks_fakturaid"] = _series_text(work, "os_aneks_fakturaid")
+
+        # The multilevel source repeats the same invoice for personal/team
+        # commission rows. Count its collected premium only once per invoice.
+        work["_invoice_key"] = work["_os_aneks_fakturaid"].where(
+            work["_os_aneks_fakturaid"] != "",
+            work["_faktura"].str.upper(),
+        )
+        invoice_rows = work[work["_invoice_key"] != ""].drop_duplicates("_invoice_key")
+        naplata_total = float(invoice_rows["_naplata_fak"].sum())
+        if not naplata_total:
+            naplata_total = float(invoice_rows["_naplata"].sum())
+        naplata_count = int(invoice_rows["_invoice_key"].nunique())
+
+        total_commission = float(work["_iznos_provizija"].sum())
+        policies_count = int(work["_polisa_broj"].nunique())
+        agents_count = int(work["_par_agentid"].nunique())
+        avg_premium = float(naplata_total / policies_count) if policies_count else 0
+
+        all_agents_df = work.groupby(["_par_agentid", "_agent_name"], dropna=False).agg(
+            policies=("_polisa_broj", "nunique"),
+            commission=("_iznos_provizija", "sum"),
+            points=("_br_bodovi", "sum"),
+            naplata=("_naplata", "sum"),
+        ).reset_index().sort_values("commission", ascending=False)
+        top_agents = all_agents_df.head(10)
+
+        commission_type = work.groupby("_nacin_provizija", dropna=False).agg(
+            policies=("_polisa_broj", "nunique"),
+            commission=("_iznos_provizija", "sum"),
+            points=("_br_bodovi", "sum"),
+        ).reset_index().rename(columns={"_nacin_provizija": "type"})
+
+        monthly = work.groupby("_mesec", dropna=False).agg(
+            policies=("_polisa_broj", "nunique"),
+            commission=("_iznos_provizija", "sum"),
+            points=("_br_bodovi", "sum"),
+        ).reset_index().rename(columns={"_mesec": "month"}).sort_values("month")
+
+        return {
+            "filters": {
+                "month": payload.month,
+                "year": payload.year,
+                "polisa_broj": payload.polisa_broj,
+                "agent_id": payload.agent_id,
+                "region_id": payload.region_id,
+                "team_id": payload.team_id,
+            },
+            "kpis": {
+                "policies": policies_count,
+                "premium_collected": naplata_total,
+                "commission_paid": total_commission,
+                "average_premium": avg_premium,
+                "agents": agents_count,
+                "naplata_fakturi": naplata_count,
+            },
+            "top_agents": [
+                {
+                    "agent_id": str(r["_par_agentid"]),
+                    "agent_name": str(r["_agent_name"]),
+                    "policies": int(r["policies"]),
+                    "commission": float(r["commission"]),
+                    "points": float(r["points"]),
+                }
+                for _, r in top_agents.iterrows()
+            ],
+            "all_agents": [
+                {
+                    "agent_id": str(r["_par_agentid"]),
+                    "agent_name": str(r["_agent_name"]),
+                    "policies": int(r["policies"]),
+                    "commission": float(r["commission"]),
+                    "points": float(r["points"]),
+                    "naplata": float(r["naplata"]),
+                }
+                for _, r in all_agents_df.iterrows()
+            ],
+            "commission_type": [
+                {
+                    "type": str(r["type"] or "N/A"),
+                    "policies": int(r["policies"]),
+                    "commission": float(r["commission"]),
+                    "points": float(r["points"]),
+                }
+                for _, r in commission_type.iterrows()
+            ],
+            "monthly": [
+                {
+                    "month": str(r["month"]),
+                    "policies": int(r["policies"]),
+                    "commission": float(r["commission"]),
+                    "points": float(r["points"]),
+                }
+                for _, r in monthly.iterrows()
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating multilevel dashboard: {e}")
+
+
 @router.post("/api/exportEksel")
 async def export_eksel(payload: ExportEkselRequest):
     """
@@ -791,10 +2356,14 @@ async def api_generate_excels(request: Request):
         # 👉 Твоја функција што ги генерира
         result = generate_excels_broker(month, year, broker)
 
+        if isinstance(result, dict) and not result.get("success", True):
+            return JSONResponse(status_code=500, content=result)
+
         # 👉 По успешното завршување
         return {
             "success": True,
-            "message": f"Excel фајловите се успешно генерирани за {month}/{year}"
+            "message": f"Excel фајловите се успешно генерирани за {month}/{year}",
+            "download_url": f"/siglife-report/download_all_excels?month={month}&year={year}"
         }
 
     except Exception as e:
@@ -810,19 +2379,28 @@ async def api_generate_excels(request: Request):
 BROKER_EXCEL_DIR = "/opt/siglife-reporting/broker_excels"
 
 
+def _broker_excels_zip_response(month: int, year: int):
+    folder_path = f"{BROKER_EXCEL_DIR}/{year}/{month}"
 
-@router.get("/download_all_excels")
-def download_all_excels(month: int = Query(..., ge=1, le=12), year: int = Query(..., ge=2000)):
-    folder_path = f"/opt/siglife-reporting/broker_excels/{year}/{month}"
-    
     if not os.path.exists(folder_path):
-        return {"success": False, "message": f"Папката {folder_path} не постои"}
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "message": f"Папката {folder_path} не постои"}
+        )
 
     zip_stream = io.BytesIO()
+    added_files = 0
     with zipfile.ZipFile(zip_stream, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_name in os.listdir(folder_path):
             if file_name.endswith(".xlsx"):
                 zf.write(os.path.join(folder_path, file_name), arcname=file_name)
+                added_files += 1
+
+    if added_files == 0:
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "message": f"Нема Excel фајлови во {folder_path}"}
+        )
 
     zip_stream.seek(0)
     return StreamingResponse(
@@ -830,6 +2408,12 @@ def download_all_excels(month: int = Query(..., ge=1, le=12), year: int = Query(
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename=excels_{month}_{year}.zip"}
     )
+
+
+
+@router.get("/download_all_excels")
+def download_all_excels(month: int = Query(..., ge=1, le=12), year: int = Query(..., ge=2000)):
+    return _broker_excels_zip_response(month, year)
 
 @router.post("/api/prov_promotori")
 async def start_prov_promotori(
@@ -875,3 +2459,212 @@ async def prov_promotori_status(job_id: str):
         return {"status": "unknown"}
 
     return job
+
+
+@router.get("/api/nepresmetani_polisi")
+async def nepresmetani_polisi(
+    mesec: str = Query(..., description="Месец 01-12"),
+    godina: str = Query(..., description="Година 2017-2030"),
+    request: Request = None
+):
+    user = request.session.get("user", {}) if request else {}
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+
+    try:
+        from calendar import monthrange
+        m = int(mesec)
+        g = int(godina)
+        last_day = monthrange(g, m)[1]
+        mdy = f"MDY({m}, {last_day}, {g})"
+
+        sql = f"""
+            SELECT FIRST 500
+                TRIM(p.polisa_broj_cel)                    AS polisa_broj,
+                TRIM(a.ime) || ' ' || TRIM(a.prezime)      AS agent_ime,
+                pa.par_agentid,
+                COUNT(DISTINCT f.os_aneks_fakturaid)        AS br_fakturi,
+                SUM(f.iznos_p)                              AS vkupno_naplata
+            FROM   fin_stavka f
+            JOIN   os_polisa p   ON p.os_polisaid   = f.os_polisaid
+            JOIN   os_ponuda o   ON o.os_ponudaid   = p.os_ponudaid
+            JOIN   provizija_agent pa
+                   ON  pa.par_agentid = o.par_agentid
+                   AND (pa.pag_datumdo IS NULL OR pa.pag_datumdo >= {mdy})
+            JOIN   par_provizijadef  pd ON pd.par_provizijadefid = pa.par_provizijadefid
+            JOIN   par_provizijatip  pt ON pt.par_provizijatipid = pd.par_provizijatipid
+            JOIN   par_agent         a  ON a.par_agentid         = pa.par_agentid
+            WHERE  f.iznos_p IS NOT NULL
+              AND  f.par_tip_kniziid IN (285, 1128, 1567)
+              AND  f.datum <= {mdy}
+              AND  pt.tip_provizija = 'P'
+              AND  f.os_aneks_fakturaid NOT IN (
+                       SELECT ppp.os_aneks_fakturaid
+                       FROM   provizija_promotori_presmetka ppp
+                       WHERE  ppp.provizija_agentid = pa.par_provizija_agentid
+                   )
+              AND  (
+                       SELECT nvl(SUM(fs2.iznos_p), 0)
+                       FROM   fin_stavka fs2
+                       WHERE  fs2.os_aneks_fakturaid = f.os_aneks_fakturaid
+                         AND  fs2.datum <= {mdy}
+                         AND  fs2.iznos_p IS NOT NULL
+                   ) = (
+                       SELECT nvl(SUM(fs3.iznos_d), 0)
+                       FROM   fin_stavka fs3
+                       WHERE  fs3.os_aneks_fakturaid = f.os_aneks_fakturaid
+                         AND  fs3.iznos_d IS NOT NULL
+                   )
+            GROUP BY TRIM(p.polisa_broj_cel),
+                     TRIM(a.ime), TRIM(a.prezime),
+                     pa.par_agentid
+            ORDER BY TRIM(a.ime), TRIM(p.polisa_broj_cel)
+        """
+
+        rows = []
+        print("=== nepresmetani_polisi SQL ===")
+        print(sql)
+        print("=== END SQL ===")
+        with informix_cursor() as cur:
+            cur.execute(sql)
+            cols = [d[0].lower() for d in cur.description]
+            for row in cur.fetchall():
+                item = dict(zip(cols, row))
+                item["vkupno_naplata"] = float(item["vkupno_naplata"] or 0)
+                rows.append(item)
+
+        return {"success": True, "count": len(rows), "rows": rows}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+
+
+@router.get("/api/zosto_ne_presmetana")
+async def zosto_ne_presmetana(
+    polisa: str = Query(...),
+    mesec: str = Query(...),
+    godina: str = Query(...),
+    agentid: int = Query(...),
+    request: Request = None
+):
+    user = request.session.get("user", {}) if request else {}
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+    try:
+        mesec_padded = mesec.zfill(2)
+        polisa_safe = polisa.strip().replace("'", "''")
+        sql = (
+            f"EXECUTE FUNCTION vesna.diagnoza_provizija_agent("
+            f"{int(agentid)},'{polisa_safe}','{mesec_padded}','{godina}')"
+        )
+        with informix_cursor() as cur:
+            cur.execute(sql)
+            row = cur.fetchone()
+        text = str(row[0]) if row and row[0] else "Нема резултат од дијагнозата."
+        return {"success": True, "text": text}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+
+
+zbiren_jobs: dict = {}
+
+def run_zbiren_pregled_job(job_id: str, mesec: str, godina: str, user_id: int):
+    try:
+        zbiren_jobs[job_id]["status"] = "running"
+        from db_ifx import Informixdriver
+        conn = Informixdriver()
+        try:
+            cur = conn.cursor()
+            sql = f"EXECUTE FUNCTION vesna.presmetka_prov_agenti_zbiren_test('{mesec}','{godina}',{user_id})"
+            cur.execute(sql)
+            row = cur.fetchone()
+            try:
+                conn.commit()
+            except Exception:
+                pass
+        finally:
+            conn.close()
+        status_code = int(row[0]) if row and row[0] is not None else -1
+        message = str(row[1]) if row and row[1] is not None else ""
+        if status_code == 1:
+            zbiren_jobs[job_id]["status"] = "ready"
+            zbiren_jobs[job_id]["message"] = message or "OK"
+        else:
+            zbiren_jobs[job_id]["status"] = "error"
+            zbiren_jobs[job_id]["message"] = message or "Грешка во процедурата"
+    except Exception as e:
+        zbiren_jobs[job_id]["status"] = "error"
+        zbiren_jobs[job_id]["message"] = str(e)
+
+
+@router.post("/api/zbiren_pregled")
+async def start_zbiren_pregled(
+    payload: ProvPromotoriRequest,
+    background_tasks: BackgroundTasks,
+    request: Request
+):
+    user = request.session.get("user", {})
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+
+    mesec = payload.mesec.zfill(2)
+    godina = payload.godina
+    user_id = user.get("userid", 6)
+
+    job_id = f"zbiren_{mesec}_{godina}_{datetime.now().timestamp()}"
+    zbiren_jobs[job_id] = {"status": "pending", "message": "Started"}
+
+    background_tasks.add_task(run_zbiren_pregled_job, job_id, mesec, godina, user_id)
+
+    return {"success": True, "job_id": job_id, "message": "Збирниот преглед е стартуван..."}
+
+
+@router.get("/api/zbiren_pregled_status/{job_id}")
+async def zbiren_pregled_status(job_id: str, request: Request):
+    user = request.session.get("user", {})
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+    job = zbiren_jobs.get(job_id)
+    if not job:
+        return {"status": "unknown"}
+    return job
+
+
+@router.post("/api/presmetaj_polisa")
+async def presmetaj_polisa(
+    request: Request,
+    polisa: str = Query(...),
+    mesec: str = Query(...),
+    godina: str = Query(...)
+):
+    user = request.session.get("user", {})
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+    try:
+        user_id = user.get("userid", 1)
+        mesec_padded = mesec.zfill(2)
+        polisa_safe = polisa.strip().replace("'", "''")
+        sql = (
+            f"EXECUTE FUNCTION vesna.presmetka_prov_promotori_polisa("
+            f"'{mesec_padded}','{godina}','{polisa_safe}',{int(user_id)})"
+        )
+
+        from db_ifx import Informixdriver
+        conn = Informixdriver()
+        try:
+            cur = conn.cursor()
+            cur.execute(sql)
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+
+        if row:
+            status_code = int(row[0]) if row[0] is not None else -1
+            message = str(row[1]) if row[1] is not None else ""
+            return {"success": status_code == 1, "status_code": status_code, "message": message}
+        return {"success": False, "message": "Нема резултат од функцијата"}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
