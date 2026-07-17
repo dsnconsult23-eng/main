@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from auth.role_utils import has_any_role
 from routers import Connection
+from typing import List
 import os, datetime
 
 router = APIRouter()
@@ -14,6 +15,12 @@ _ALLOWED_ROLES = ["admin", "promena_premija"]
 
 TIPOVI_PROMENA = [
     ("premija_kolektivno", "Промена на премија на Фактура Колективно"),
+    ("dopolnitelno_osiguruvanje", "Додавање на дополнително осигурување"),
+]
+
+TIP_KNIZI_DOPOLNITELNO = [
+    ("DPREM", "Дополнителна премија"),
+    ("ZPREM", "Здравствена премија"),
 ]
 
 _LOG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "promena_premija_log.txt")
@@ -142,17 +149,169 @@ def _update_premija(os_aneks_fakturaid: int, nov_iznos: float, nov_iznos_denari:
             pass
 
 
+def _konverzija_eur_mkd(cursor, na_datum, iznos_eur: float) -> float:
+    datum_str = na_datum.strftime("%m/%d/%Y") if hasattr(na_datum, "strftime") else str(na_datum)
+    cursor.execute(
+        "SELECT konverzija(?, ?, 'EUR', 'MKD') FROM systables WHERE tabid = 1",
+        [datum_str, iznos_eur]
+    )
+    row = cursor.fetchone()
+    return float(row[0] or 0) if row else 0.0
+
+
+def _create_dopolnitelno_faktura(os_aneks_fakturaid: int, tip_knizi_kod: str,
+                                  nov_iznos_eur: float, user_name: str):
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or cursor is None:
+        raise RuntimeError("Нема конекција кон базата")
+    try:
+        cursor.execute(
+            "SELECT par_tip_kniziid FROM viki.par_tip_knizi WHERE par_tip_knizi = ?",
+            [tip_knizi_kod]
+        )
+        tip_row = cursor.fetchone()
+        if not tip_row:
+            raise RuntimeError(f"Не е пронајден тип на книжење '{tip_knizi_kod}'.")
+        nov_par_tip_kniziid = tip_row[0]
+
+        cursor.execute(
+            """
+            SELECT x0.os_aneksid, x0.par_tip_dokumentid, x0.rata, x0.os_ponuda_detailid,
+                   x0.data_faktura, x0.data_valuta, x0.os_aneks_rataid,
+                   f.par_filijalaid, f.par_clientid, f.par_yearid, f.datum, f.datum_knizi,
+                   f.datum_stavka, f.datum_fakt_valuta, f.par_valutaid, f.par_kursid,
+                   f.os_polisaid, f.par_agent_id, f.pat_tip_platiid,
+                   x2.os_polisaid
+            FROM viki.os_aneks_faktura x0
+            JOIN viki.os_aneks x1 ON x1.os_aneksid = x0.os_aneksid
+            JOIN viki.os_polisa x2 ON x2.os_polisaid = x1.os_polisaid
+            LEFT JOIN viki.fin_stavka f
+                   ON f.os_aneks_fakturaid = x0.os_aneks_fakturaid AND f.iznos_d IS NOT NULL
+            WHERE x0.os_aneks_fakturaid = ?
+            """,
+            [os_aneks_fakturaid]
+        )
+        src = cursor.fetchone()
+        if not src:
+            raise RuntimeError(f"Фактурата {os_aneks_fakturaid} не е пронајдена.")
+
+        (os_aneksid, par_tip_dokumentid, rata, os_ponuda_detailid, data_faktura, data_valuta,
+         os_aneks_rataid, par_filijalaid, par_clientid, par_yearid, datum, datum_knizi,
+         datum_stavka, datum_fakt_valuta, par_valutaid, par_kursid, os_polisaid, par_agent_id,
+         pat_tip_platiid, os_polisaid_reliable) = src
+
+        cursor.execute(
+            """
+            SELECT MAX(os_ponuda_detailid)
+            FROM viki.os_ponuda_detail
+            WHERE os_ponudaid IN (
+                SELECT os_ponudaid FROM viki.os_ponuda
+                WHERE os_ponudaid IN (
+                    SELECT os_ponudaid FROM viki.os_polisa WHERE os_polisaid = ?
+                )
+            )
+            AND ts_type_insuranceid IN (
+                SELECT ts_type_insuranceid FROM viki.par_tip_knizi WHERE par_tip_kniziid = ?
+            )
+            """,
+            [os_polisaid_reliable, nov_par_tip_kniziid]
+        )
+        detail_row = cursor.fetchone()
+        if not detail_row or detail_row[0] is None:
+            raise RuntimeError(
+                f"Не е пронајдена соодветна ставка (os_ponuda_detail) за тип на книжење '{tip_knizi_kod}'."
+            )
+        os_ponuda_detailid = detail_row[0]
+
+        nov_iznos = nov_iznos_eur
+        nov_iznos_denari = _konverzija_eur_mkd(cursor, data_faktura, nov_iznos_eur)
+
+        cursor.execute("SELECT sq_os_aneks_fakturaid.NEXTVAL FROM systables WHERE tabid = 1")
+        nov_os_aneks_fakturaid = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            INSERT INTO viki.os_aneks_faktura(
+                os_aneks_fakturaid, datecreated, usercreated, version,
+                os_aneksid, par_tip_dokumentid, par_tip_kniziid, rata, os_ponuda_detailid,
+                data_faktura, data_valuta, iznos, iznos_denari, par_statusid, os_aneks_rataid)
+            VALUES (?, CURRENT, ?, 0,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, 1, ?)
+            """,
+            [nov_os_aneks_fakturaid, user_name,
+             os_aneksid, par_tip_dokumentid, nov_par_tip_kniziid, rata, os_ponuda_detailid,
+             data_faktura, data_valuta, nov_iznos, nov_iznos_denari, os_aneks_rataid]
+        )
+
+        if par_filijalaid is not None:
+            cursor.execute("SELECT sq_fin_stavka.NEXTVAL FROM systables WHERE tabid = 1")
+            nov_fin_stavkaid = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                INSERT INTO viki.fin_stavka(
+                    fin_stavkaid, datecreated, usercreated, version, par_filijalaid,
+                    par_tip_dokumentid, par_tip_kniziid, par_clientid, os_aneks_fakturaid,
+                    par_yearid, datum, datum_knizi, datum_stavka, datum_fakt_valuta, par_valutaid,
+                    par_kursid, os_polisaid, par_agent_id, pat_tip_platiid,
+                    iznos_otvoren, f_rs, iznos_d, iznos_d_den, par_statusid)
+                VALUES (?, CURRENT, ?, 0, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, 'R', ?, ?, 1)
+                """,
+                [nov_fin_stavkaid, user_name, par_filijalaid,
+                 par_tip_dokumentid, nov_par_tip_kniziid, par_clientid, nov_os_aneks_fakturaid,
+                 par_yearid, datum, datum_knizi, datum_stavka, datum_fakt_valuta, par_valutaid,
+                 par_kursid, os_polisaid, par_agent_id, pat_tip_platiid,
+                 nov_iznos, nov_iznos, nov_iznos_denari]
+            )
+
+        try:
+            conn.commit()
+        except Exception:
+            pass
+
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(
+                f"[{datetime.datetime.now().isoformat(timespec='seconds')}] user={user_name} "
+                f"DOPOLNITELNO_OSIGURUVANJE izvor_fakturaid={os_aneks_fakturaid} "
+                f"nova_fakturaid={nov_os_aneks_fakturaid} tip_knizi={tip_knizi_kod} "
+                f"iznos={nov_iznos} iznos_denari={nov_iznos_denari}\n"
+            )
+
+        return nov_os_aneks_fakturaid
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _render(request, user, polisa_broj, tip_promena, rows, error, success):
     return templates.TemplateResponse("promena_premija.html", {
-        "request":     request,
-        "user":        user,
-        "active":      "promena_premija",
-        "tipovi":      TIPOVI_PROMENA,
-        "polisa_broj": polisa_broj,
-        "tip_promena": tip_promena,
-        "rows":        rows,
-        "error":       error,
-        "success":     success,
+        "request":            request,
+        "user":               user,
+        "active":             "promena_premija",
+        "tipovi":             TIPOVI_PROMENA,
+        "tipovi_knizi_dopolnitelno": TIP_KNIZI_DOPOLNITELNO,
+        "polisa_broj":        polisa_broj,
+        "tip_promena":        tip_promena,
+        "rows":               rows,
+        "error":              error,
+        "success":            success,
     })
 
 
@@ -208,6 +367,41 @@ def promena_premija_save(
             f"Фактурата е успешно ажурирана. Износ: {star_iznos:.2f} → {nov_iznos:.2f}, "
             f"Износ (ден.): {star_iznos_denari:.2f} → {nov_iznos_denari:.2f}"
         )
+    except Exception as e:
+        error = str(e)
+
+    rows = None
+    try:
+        rows = _fetch_fakturi(polisa_broj)
+    except Exception:
+        pass
+
+    return _render(request, user, polisa_broj, tip_promena, rows, error, success)
+
+
+@router.post("/promena-premija/dodaj-dopolnitelno")
+def promena_premija_dodaj_dopolnitelno(
+    request:          Request,
+    polisa_broj:      str = Form(...),
+    tip_promena:      str = Form(...),
+    tip_knizi_novo:   str = Form(...),
+    fakturi_ids:      List[int] = Form(...),
+    nov_iznos:        float = Form(...),
+):
+    user, redirect = _require_role(request)
+    if redirect:
+        return redirect
+
+    error, success = None, None
+    user_name = user.get("username") or user.get("name") or "?"
+    kreirani = []
+    try:
+        for os_aneks_fakturaid in fakturi_ids:
+            nov_id = _create_dopolnitelno_faktura(
+                os_aneks_fakturaid, tip_knizi_novo, nov_iznos, user_name
+            )
+            kreirani.append(nov_id)
+        success = f"Успешно се креирани {len(kreirani)} нова(и) фактура(и) за дополнително осигурување."
     except Exception as e:
         error = str(e)
 

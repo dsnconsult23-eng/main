@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Промена на премија на фактура{% endblock %}
+
+{% block content %}
+<div class="page-title">Промена на премија на фактура</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:1.25rem;">
+  <form method="post" action="/siglife-report/promena-premija/search">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:.75rem 1rem; align-items:end;">
+      <div class="form-group" style="margin:0">
+        <label>Број на полиса</label>
+        <input type="text" name="polisa_broj" value="{{ polisa_broj or '' }}" placeholder="пр. 19/001294" required>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Тип на промена</label>
+        <select name="tip_promena">
+          {% for val, lbl in tipovi %}
+          <option value="{{ val }}" {% if tip_promena == val %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">🔎 Прегледај фактури</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if rows is not none %}
+  {% if not rows %}
+  <div class="alert alert-info">Нема фактури за оваа полиса.</div>
+  {% else %}
+
+  {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
+  <div style="margin-bottom:.75rem;">
+    <button type="button" class="btn btn-primary" onclick="openDopolnitelnoModal()">➕ Додади дополнително осигурување</button>
+  </div>
+  <form id="dopolnitelnoForm" method="post" action="/siglife-report/promena-premija/dodaj-dopolnitelno">
+    <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+    <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+    <input type="hidden" name="tip_knizi_novo" id="df_tip_knizi_novo" value="">
+    <input type="hidden" name="nov_iznos" id="df_nov_iznos" value="">
+  </form>
+  {% endif %}
+
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
+          <th></th>
+          {% endif %}
+          <th>Фактура</th>
+          <th>Дат. Фактура</th>
+          <th>Дат. Валута</th>
+          <th>Тип</th>
+          <th style="text-align:right">Износ</th>
+          <th style="text-align:right">Износ (ден.)</th>
+          <th style="text-align:right">Наплата</th>
+          {% if tip_promena != 'dopolnitelno_osiguruvanje' %}
+          <th>Нов износ</th>
+          <th>Нов износ (ден.)</th>
+          <th></th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
+          <td>
+            <input type="checkbox" class="dop-faktura-check" form="dopolnitelnoForm"
+                   name="fakturi_ids" value="{{ r.os_aneks_fakturaid }}">
+          </td>
+          {% endif %}
+          <td><strong>{{ r.faktura }}</strong></td>
+          <td>{{ r.data_faktura }}</td>
+          <td>{{ r.data_valuta }}</td>
+          <td>{{ r.tip_knizi }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.iznos_denari) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.naplata) }}</td>
+          {% if tip_promena != 'dopolnitelno_osiguruvanje' %}
+          <td>
+            <input type="number" step="0.01" form="editForm-{{ r.os_aneks_fakturaid }}"
+                   name="nov_iznos" value="{{ '%.2f'|format(r.iznos) }}" style="min-width:90px;">
+          </td>
+          <td>
+            <input type="number" step="0.01" form="editForm-{{ r.os_aneks_fakturaid }}"
+                   name="nov_iznos_denari" value="{{ '%.2f'|format(r.iznos_denari) }}" style="min-width:100px;">
+          </td>
+          <td>
+            <form id="editForm-{{ r.os_aneks_fakturaid }}" method="post"
+                  action="/siglife-report/promena-premija/save"
+                  onsubmit="return confirm('Дали сте сигурни дека сакате да ја измените премијата на фактура {{ r.faktura }}?');"
+                  style="display:inline;">
+              <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+              <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+              <input type="hidden" name="os_aneks_fakturaid" value="{{ r.os_aneks_fakturaid }}">
+              <button type="submit" class="btn btn-warning" style="padding:.4rem .8rem; font-size:.82rem;">💾 Зачувај</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% if tip_promena == 'dopolnitelno_osiguruvanje' %}
+<div id="dopolnitelnoModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,.4); z-index:2000; align-items:flex-start; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; margin-top:8vh; width:min(480px, 92vw);
+       box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <div style="padding:1rem 1.25rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <strong>Додавање на дополнително осигурување</strong>
+      <button type="button" onclick="closeDopolnitelnoModal()" class="btn btn-secondary" style="padding:.2rem .6rem;">✕</button>
+    </div>
+    <div style="padding:1rem 1.25rem;">
+      <div id="dop_error" class="alert alert-error" style="display:none;"></div>
+      <div class="form-group">
+        <label>Тип на книжење</label>
+        <select id="dop_tip_knizi">
+          {% for val, lbl in tipovi_knizi_dopolnitelno %}
+          <option value="{{ val }}">{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Износ (EUR)</label>
+        <input type="number" step="0.01" id="dop_iznos" value="0.00">
+      </div>
+      <p style="color:#7f8c8d; font-size:.85rem;">
+        Износот во денари се пресметува автоматски (функција <code>konverzija</code>, курс на датумот на фактурата).
+      </p>
+      <p style="color:#7f8c8d; font-size:.85rem;">
+        Избрани фактури: <span id="dop_broj_izbrani">0</span>
+      </p>
+    </div>
+    <div style="padding:.75rem 1.25rem; border-top:1px solid #eee; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="closeDopolnitelnoModal()">Затвори</button>
+      <button type="button" class="btn btn-primary" onclick="submitDopolnitelno()">💾 Зачувај</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openDopolnitelnoModal() {
+  var checked = document.querySelectorAll('.dop-faktura-check:checked');
+  if (!checked.length) {
+    alert('Изберете барем една фактура пред да продолжите.');
+    return;
+  }
+  document.getElementById('dop_error').style.display = 'none';
+  document.getElementById('dop_broj_izbrani').textContent = checked.length;
+  document.getElementById('dopolnitelnoModal').style.display = 'flex';
+}
+
+function closeDopolnitelnoModal() {
+  document.getElementById('dopolnitelnoModal').style.display = 'none';
+}
+
+function submitDopolnitelno() {
+  var checked = document.querySelectorAll('.dop-faktura-check:checked');
+  var errEl = document.getElementById('dop_error');
+  if (!checked.length) {
+    errEl.textContent = 'Изберете барем една фактура.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!confirm('Дали сте сигурни дека сакате да креирате ' + checked.length + ' нова(и) фактура(и) за дополнително осигурување?')) {
+    return;
+  }
+  document.getElementById('df_tip_knizi_novo').value = document.getElementById('dop_tip_knizi').value;
+  document.getElementById('df_nov_iznos').value = document.getElementById('dop_iznos').value;
+  document.getElementById('df_nov_iznos_denari').value = document.getElementById('dop_iznos_denari').value;
+  document.getElementById('dopolnitelnoForm').submit();
+}
+</script>
+{% endif %}
+
+{% endblock %}
