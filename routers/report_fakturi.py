@@ -6,6 +6,7 @@ from auth.role_utils import has_any_role
 from routers import Connection
 from typing import List, Optional
 import io, os, datetime, openpyxl
+import jpype
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
@@ -52,6 +53,25 @@ def _require_role(request: Request):
 
 def _s(v) -> str:
     return (v or "").strip()
+
+
+def _to_db_date(v):
+    # HTML5 <input type="date"> праќа ISO string ("YYYY-MM-DD"). jaydebeapi не знае
+    # автоматски да bind-ира Python datetime.date, а плаин string го фаќа локалниот
+    # date-format на Informix (DBDATE=MDY4/, т.е. mm/dd/yyyy), па филтрите молчешкум
+    # не работат исправно. Затоа праќаме вистински java.sql.Date, чиј valueOf()
+    # секогаш очекува "yyyy-mm-dd", независно од Informix locale.
+    if v is None or v == "":
+        return None
+    if isinstance(v, datetime.date):
+        d = v
+    else:
+        try:
+            d = datetime.datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+    JavaDate = jpype.JClass("java.sql.Date")
+    return JavaDate.valueOf(d.strftime("%Y-%m-%d"))
 
 
 # ------------------------------------------------------------------
@@ -125,21 +145,21 @@ def _build_sql(f: dict, nivo: str):
     if _s(f.get("naplata_den_do")):
         add(f"AND {_NAPLATA_DEN_EXPR} <= ?", _s(f["naplata_den_do"]))
     if _s(f.get("datum_aneks_od")):
-        add(f"AND {_DATUM_ANEKS_EXPR} >= ?", _s(f["datum_aneks_od"]))
+        add(f"AND {_DATUM_ANEKS_EXPR} >= ?", _to_db_date(f["datum_aneks_od"]))
     if _s(f.get("datum_aneks_do")):
-        add(f"AND {_DATUM_ANEKS_EXPR} <= ?", _s(f["datum_aneks_do"]))
+        add(f"AND {_DATUM_ANEKS_EXPR} <= ?", _to_db_date(f["datum_aneks_do"]))
     if _s(f.get("datum_valuta_od")):
-        add("AND x0.data_valuta >= ?", _s(f["datum_valuta_od"]))
+        add("AND x0.data_valuta >= ?", _to_db_date(f["datum_valuta_od"]))
     if _s(f.get("datum_valuta_do")):
-        add("AND x0.data_valuta <= ?", _s(f["datum_valuta_do"]))
+        add("AND x0.data_valuta <= ?", _to_db_date(f["datum_valuta_do"]))
     if _s(f.get("datum_faktura_od")):
-        add("AND x0.data_faktura >= ?", _s(f["datum_faktura_od"]))
+        add("AND x0.data_faktura >= ?", _to_db_date(f["datum_faktura_od"]))
     if _s(f.get("datum_faktura_do")):
-        add("AND x0.data_faktura <= ?", _s(f["datum_faktura_do"]))
+        add("AND x0.data_faktura <= ?", _to_db_date(f["datum_faktura_do"]))
     if _s(f.get("datum_knizi_od")):
-        add("AND x3.dat_nalog >= ?", _s(f["datum_knizi_od"]))
+        add("AND x3.dat_nalog >= ?", _to_db_date(f["datum_knizi_od"]))
     if _s(f.get("datum_knizi_do")):
-        add("AND x3.dat_nalog <= ?", _s(f["datum_knizi_do"]))
+        add("AND x3.dat_nalog <= ?", _to_db_date(f["datum_knizi_do"]))
     if _s(f.get("broker")):
         add("AND UPPER(brk.desc) LIKE ?", "%" + _s(f["broker"]).upper() + "%")
     if _s(f.get("agent")):
@@ -151,9 +171,8 @@ def _build_sql(f: dict, nivo: str):
     if f.get("dospeana"):
         where.append(f"AND (NVL(x0.iznos,0) - NVL({_NAPLATA_EXPR},0)) > 0.005")
         if not _s(f.get("datum_faktura_do")):
-            from datetime import date as _d
             where.append("AND x0.data_faktura <= ?")
-            params.append(_d.today().isoformat())
+            params.append(_to_db_date(datetime.date.today()))
 
     klient_tip = _s(f.get("klient_tip"))
     if klient_tip == "Физичко":
@@ -420,7 +439,7 @@ def _build_sintetika_sql(f: dict):
     w = " ".join(where)
 
     sql = f"""
-        SELECT
+        SELECT FIRST 20000
             x1.datum,
             x1.datum_knizi,
             x2.par_tip_dokument,
@@ -449,7 +468,7 @@ def _build_sintetika_sql(f: dict):
           AND x1.par_tip_dokumentid = 285
           {w}
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 12, 13, 14
-        ORDER BY 13, 1
+        ORDER BY 4, 13, 1
     """
     return sql, params
 
@@ -458,15 +477,23 @@ def _to_groups_sintetika(raw):
     """
     Групира прво по клиент (прикажан еднаш), а внатре по фактура
     (секоја со своја подсума "Вкупно :").
+
+    Групирањето е по клуч (dict), НЕ по соседност во листата — редовите
+    на исти os_aneks/anex+година можат да припаѓаат на РАЗЛИЧНИ клиенти
+    (пр. збиренаneks поврзувачки повеќе полиси/клиенти) и да се
+    испреплетени во ORDER BY редоследот (сортиран по fakturaint), па
+    истиот клиент/фактура може да се појави повеќе пати не-соседно.
+    Групирање по соседност тогаш создава дупликат "Клиент:" блокови со
+    нецелосни (погрешни) подсуми/салда.
     """
+    clients_by_id = {}
     clients = []
-    current_client = None
-    current_faktura = None
     grand = {"iznos_d": 0, "iznos_d_den": 0, "iznos_p": 0, "iznos_p_den": 0}
 
     for r in raw:
         row = {
             "datum":       _fmt_date(r[0]),
+            "_datum_raw":  r[0],
             "datum_knizi": _fmt_date(r[1]),
             "tip_dokument": r[2] or "",
             "client_id":    r[3] or "",
@@ -481,34 +508,42 @@ def _to_groups_sintetika(raw):
             "admin_zabrana_naziv": r[13] or "",
         }
 
-        if current_client is None or current_client["client_id"] != row["client_id"]:
-            current_client = {
+        client = clients_by_id.get(row["client_id"])
+        if client is None:
+            client = {
                 "client_id": row["client_id"],
                 "client_naziv": row["client_naziv"],
                 "admin_zabrana_naziv": row["admin_zabrana_naziv"],
                 "faktura_groups": [],
+                "_faktura_by_key": {},
                 "subtotal": {"iznos_d": 0, "iznos_d_den": 0, "iznos_p": 0, "iznos_p_den": 0},
             }
-            clients.append(current_client)
-            current_faktura = None
+            clients_by_id[row["client_id"]] = client
+            clients.append(client)
 
-        if current_faktura is None or current_faktura["faktura"] != row["faktura"]:
-            current_faktura = {
+        fg = client["_faktura_by_key"].get(row["faktura"])
+        if fg is None:
+            fg = {
                 "polisa": row["polisa"],
                 "faktura": row["faktura"],
                 "rows": [],
                 "subtotal": {"iznos_d": 0, "iznos_d_den": 0, "iznos_p": 0, "iznos_p_den": 0},
             }
-            current_client["faktura_groups"].append(current_faktura)
+            client["_faktura_by_key"][row["faktura"]] = fg
+            client["faktura_groups"].append(fg)
 
-        current_faktura["rows"].append(row)
+        fg["rows"].append(row)
         for k in ("iznos_d", "iznos_d_den", "iznos_p", "iznos_p_den"):
-            current_faktura["subtotal"][k] += row[k]
-            current_client["subtotal"][k] += row[k]
+            fg["subtotal"][k] += row[k]
+            client["subtotal"][k] += row[k]
             grand[k] += row[k]
 
     for c in clients:
+        del c["_faktura_by_key"]
         for fg in c["faktura_groups"]:
+            fg["rows"].sort(key=lambda r: (r["_datum_raw"] is None, r["_datum_raw"]))
+            for r in fg["rows"]:
+                del r["_datum_raw"]
             fg["subtotal"]["saldo"] = fg["subtotal"]["iznos_d"] - fg["subtotal"]["iznos_p"]
         c["subtotal"]["saldo"] = c["subtotal"]["iznos_d"] - c["subtotal"]["iznos_p"]
     grand["saldo"] = grand["iznos_d"] - grand["iznos_p"]
@@ -755,7 +790,7 @@ def report_fakturi_post(
         "naplata_od": naplata_od, "naplata_do": naplata_do,
         "naplata_den_od": naplata_den_od, "naplata_den_do": naplata_den_do,
         "datum_aneks_od": datum_aneks_od, "datum_aneks_do": datum_aneks_do,
-        "datum_valuta_od": datum_valuta_od, "datum_valuta_do": datum_valuta_od,
+        "datum_valuta_od": datum_valuta_od, "datum_valuta_do": datum_valuta_do,
         "datum_faktura_od": datum_faktura_od, "datum_faktura_do": datum_faktura_do,
         "datum_knizi_od": datum_knizi_od, "datum_knizi_do": datum_knizi_do,
         "broker": broker, "agent": agent, "posrednik": posrednik, "promotor": promotor,

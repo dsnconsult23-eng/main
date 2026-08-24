@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}SMS известувања — лог{% endblock %}
+
+{% block content %}
+<div class="page-title">SMS известувања — лог</div>
+
+{% if error %}
+<div class="alert alert-error">❌ {{ error }}</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:1.25rem;">
+  <form method="get" action="/siglife-report/sms-log" style="display:flex; gap:1rem; align-items:end; flex-wrap:wrap;">
+    <div class="form-group" style="margin:0;">
+      <label>Статус</label>
+      <select name="status">
+        <option value="" {% if not filters.status %}selected{% endif %}>-- сите --</option>
+        <option value="SENT" {% if filters.status == 'SENT' %}selected{% endif %}>SENT</option>
+        <option value="FAILED" {% if filters.status == 'FAILED' %}selected{% endif %}>FAILED</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>Job ID содржи</label>
+      <input type="text" name="job_id" value="{{ filters.job_id }}" placeholder="пр. DPP_ или SMS_RODENDEN_" style="width:220px;">
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>Телефон содржи</label>
+      <input type="text" name="recipient" value="{{ filters.recipient }}" placeholder="пр. 38970" style="width:160px;">
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>Лимит (макс. 1000)</label>
+      <input type="number" name="limit" value="{{ filters.limit }}" min="1" max="1000" style="width:90px;">
+    </div>
+    <button type="submit" class="btn btn-primary">🔎 Филтрирај</button>
+    <a class="btn btn-secondary"
+       href="/siglife-report/sms-log/excel?status={{ filters.status }}&job_id={{ filters.job_id }}&recipient={{ filters.recipient }}&limit={{ filters.limit }}">
+       📥 Извези во Excel
+    </a>
+    <button class="btn btn-secondary" id="btnExcelTipA" type="button">
+       📥 Полиси Тип А (доспеана премија)
+    </button>
+    <a class="btn btn-secondary" href="/siglife-report/sms-log/excel-tip-b">
+       📥 Полиси Тип Б (ризико кредит)
+    </a>
+    <div style="flex-basis:100%; color:#5d6d7e; font-size:.85rem;">
+      Тип А прикажува полиси со доспеан долг од најмалку 5 EUR или 300 MKD.
+    </div>
+    <div id="tipAExportStatus" style="display:none;flex-basis:100%;font-weight:700;color:#1f6fb2;"></div>
+  </form>
+</div>
+
+<div class="card" style="padding:0; overflow:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Датум/време</th>
+        <th>Job ID</th>
+        <th>Примач</th>
+        <th>Испраќач</th>
+        <th>Статус</th>
+        <th>HTTP</th>
+        <th>Порака</th>
+        <th>Грешка</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="white-space:nowrap;">{{ r.created_at }}</td>
+        <td>{{ r.job_id }}</td>
+        <td>{{ r.recipient }}</td>
+        <td>{{ r.sender }}</td>
+        <td style="font-weight:700; color:{% if r.status == 'SENT' %}#1a6a1a{% else %}#a00000{% endif %};">
+          {{ r.status }}
+        </td>
+        <td>{{ r.http_status }}</td>
+        <td style="max-width:340px; white-space:pre-wrap;">{{ r.message }}</td>
+        <td style="max-width:220px; white-space:pre-wrap; color:#a00000;">{{ r.error_message }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">Нема записи за избраните филтри.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+  const button = document.getElementById('btnExcelTipA');
+  const statusBox = document.getElementById('tipAExportStatus');
+  if (!button || !statusBox) return;
+
+  const showStatus = (message, color = '#1f6fb2') => {
+    statusBox.style.display = 'block';
+    statusBox.style.color = color;
+    statusBox.textContent = message;
+  };
+
+  const downloadExcel = async jobId => {
+    const response = await fetch(`/siglife-report/sms-log/excel-tip-a/download/${jobId}`);
+    if (!response.ok) {
+      let detail = '';
+      try { detail = (await response.json()).detail || ''; } catch (_) {}
+      throw new Error(detail || `Грешка при симнување (${response.status}).`);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainName = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = encodedName
+      ? decodeURIComponent(encodedName[1])
+      : (plainName ? plainName[1] : 'dospeana_premija_tip_a.xlsx');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const poll = async jobId => {
+    try {
+      const response = await fetch(`/siglife-report/sms-log/excel-tip-a/status/${jobId}`);
+      const data = await response.json();
+      if (!response.ok || data.status === 'error') {
+        throw new Error(data.message || 'Грешка при подготовка на Excel.');
+      }
+      if (data.status === 'ready') {
+        showStatus('Excel е подготвен. Симнувањето започнува...', '#1a6a1a');
+        await downloadExcel(jobId);
+        showStatus('Excel Тип А е успешно симнат.', '#1a6a1a');
+        button.disabled = false;
+        return;
+      }
+      showStatus(data.message || 'Excel извештајот се подготвува...');
+      window.setTimeout(() => poll(jobId), 3000);
+    } catch (error) {
+      showStatus(`Грешка: ${error.message}`, '#a00000');
+      button.disabled = false;
+    }
+  };
+
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    showStatus('Се стартува подготовката на Excel...');
+    try {
+      const response = await fetch('/siglife-report/sms-log/excel-tip-a/start', {method:'POST'});
+      const data = await response.json();
+      if (!response.ok || !data.job_id) throw new Error(data.detail || data.message || 'Job-от не е стартуван.');
+      poll(data.job_id);
+    } catch (error) {
+      showStatus(`Грешка: ${error.message}`, '#a00000');
+      button.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

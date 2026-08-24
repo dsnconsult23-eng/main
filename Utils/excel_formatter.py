@@ -42,8 +42,6 @@ def format_provision_excel(
     for col, width in fixed_widths.items():
         ws.column_dimensions[col].width = width
 
-    # 4. Add total provision row
-    last_row = ws.max_row + 1
      # ------------------------------------------------
     # 1️⃣ Стави курс во скриена ќелија
     # ------------------------------------------------
@@ -58,19 +56,22 @@ def format_provision_excel(
     total_row = last_data_row + 1
     ws.insert_rows(total_row)
 
-    ws[f"{label_col}{total_row}"] = "Вкупно провизија (МКД):"
+    ws[f"{label_col}{total_row}"] = "Вкупно провизија (EUR):"
     ws[f"{label_col}{total_row}"].font = Font(bold=True)
-
-    # FORMULA (НЕ директно множење со број!)
-    ws[f"{prov_col}{total_row}"] = (
-        f"=SUM({prov_col}2:{prov_col}{last_data_row})*{kurs_cell}"
-    )
+    ws[f"{prov_col}{total_row}"] = f"=SUM({prov_col}2:{prov_col}{last_data_row})"
     ws[f"{prov_col}{total_row}"].font = Font(bold=True)
     ws[f"{prov_col}{total_row}"].number_format = "#,##0.00"
+    total_mkd_row = total_row + 1
+    ws[f"{label_col}{total_mkd_row}"] = "Вкупно провизија (МКД):"
+    ws[f"{label_col}{total_mkd_row}"].font = Font(bold=True)
+    ws[f"{prov_col}{total_mkd_row}"] = f"=ROUND(SUM({prov_col}2:{prov_col}{last_data_row})*{kurs_cell},0)"
+    ws[f"{prov_col}{total_mkd_row}"].font = Font(bold=True)
+    ws[f"{prov_col}{total_mkd_row}"].number_format = "#,##0"
     # Border
     thin = Side(style="thin", color="000000")
-    for c in range(1, ws.max_column + 1):
-        ws.cell(row=last_row, column=c).border = Border(top=thin, bottom=thin)
+    for row in (total_row, total_mkd_row):
+        for c in range(1, ws.max_column + 1):
+            ws.cell(row=row, column=c).border = Border(top=thin, bottom=thin)
 
     wb.save(file_path)
 
@@ -128,20 +129,23 @@ def format_provision_excel_in_memory(excel_io: io.BytesIO, sheet_name="Sheet1", 
     total_row = last_data_row + 1
     ws.insert_rows(total_row)
 
-    ws[f"{label_col}{total_row}"] = "Вкупно провизија (МКД):"
+    ws[f"{label_col}{total_row}"] = "Вкупно провизија (EUR):"
     ws[f"{label_col}{total_row}"].font = Font(bold=True)
-
-    # FORMULA (НЕ директно множење со број!)
-    ws[f"{prov_col}{total_row}"] = (
-        f"=SUM({prov_col}2:{prov_col}{last_data_row})*{kurs_cell}"
-    )
+    ws[f"{prov_col}{total_row}"] = f"=SUM({prov_col}2:{prov_col}{last_data_row})"
     ws[f"{prov_col}{total_row}"].font = Font(bold=True)
     ws[f"{prov_col}{total_row}"].number_format = "#,##0.00"
+    total_mkd_row = total_row + 1
+    ws[f"{label_col}{total_mkd_row}"] = "Вкупно провизија (МКД):"
+    ws[f"{label_col}{total_mkd_row}"].font = Font(bold=True)
+    ws[f"{prov_col}{total_mkd_row}"] = f"=ROUND(SUM({prov_col}2:{prov_col}{last_data_row})*{kurs_cell},0)"
+    ws[f"{prov_col}{total_mkd_row}"].font = Font(bold=True)
+    ws[f"{prov_col}{total_mkd_row}"].number_format = "#,##0"
 
     # Border
     thin = Side(style="thin", color="000000")
-    for c in range(1, ws.max_column + 1):
-        ws.cell(row=last_data_row, column=c).border = Border(top=thin, bottom=thin)
+    for row in (total_row, total_mkd_row):
+        for c in range(1, ws.max_column + 1):
+            ws.cell(row=row, column=c).border = Border(top=thin, bottom=thin)
 
     # Save back to BytesIO
     out_io = io.BytesIO()
@@ -270,7 +274,7 @@ def mk_to_latin(text):
 # ---------------------------------------------------------
 # MAIN FORMATTER
 # ---------------------------------------------------------
-def format_broker_excel(file_path, sheet_name="Sheet1"):
+def format_broker_excel(file_path, sheet_name="Sheet1", kurs=0.0, kurs_cell="X1"):
     wb = load_workbook(file_path)
     ws = wb[sheet_name]
 
@@ -376,17 +380,30 @@ def format_broker_excel(file_path, sheet_name="Sheet1"):
     # ----------------------------
     # 7. TOTAL SUM IN COLUMN T
     # ----------------------------
-    last_row = ws.max_row + 1
+    last_data_row = ws.max_row
+    total_row = last_data_row + 1
+    total_mkd_row = last_data_row + 2
 
-    ws[f"S{last_row}"] = "Vkupno provizija:"
-    ws[f"S{last_row}"].font = bold
+    ws[kurs_cell] = float(kurs or 0)
+    ws.column_dimensions[kurs_cell.rstrip("0123456789")].hidden = True
 
-    ws[f"T{last_row}"] = f"=SUM(T2:T{last_row-1})"
-    ws[f"T{last_row}"].font = bold
-    ws[f"T{last_row}"].number_format = "#.##0,00"
+    ws[f"S{total_row}"] = "Vkupno provizija (EUR):"
+    ws[f"S{total_row}"].font = bold
 
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=last_row, column=col).border = border_all
+    ws[f"T{total_row}"] = f"=SUM(T2:T{last_data_row})"
+    ws[f"T{total_row}"].font = bold
+    ws[f"T{total_row}"].number_format = "#.##0,00"
+
+    ws[f"S{total_mkd_row}"] = "Vkupno provizija (MKD):"
+    ws[f"S{total_mkd_row}"].font = bold
+
+    ws[f"T{total_mkd_row}"] = f"=ROUND(SUM(T2:T{last_data_row})*{kurs_cell},0)"
+    ws[f"T{total_mkd_row}"].font = bold
+    ws[f"T{total_mkd_row}"].number_format = "#,##0"
+
+    for row in (total_row, total_mkd_row):
+        for col in range(1, ws.max_column + 1):
+            ws.cell(row=row, column=col).border = border_all
 
     wb.save(file_path)
     print("✔ Excel formatiran.")
@@ -411,9 +428,9 @@ def convert_excel_to_latin(file_path, sheet_name="Sheet1"):
 # ---------------------------------------------------------
 # 4) MASTER FUNCTION – CALL ONE FUNCTION
 # ---------------------------------------------------------
-def process_broker_excel(file_path):
+def process_broker_excel(file_path, kurs=0.0):
     convert_excel_to_latin(file_path)
-    format_broker_excel(file_path)
+    format_broker_excel(file_path, kurs=kurs)
     print("✔ Zavrseno kompletno.")
 
 import io
@@ -421,7 +438,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
-def format_broker_excel_in_memory(excel_io: io.BytesIO, sheet_name="Sheet1", prov_col="T"):
+def format_broker_excel_in_memory(excel_io: io.BytesIO, sheet_name="Sheet1", prov_col="T", kurs=0.0, kurs_cell="X1"):
     """
     НОВА ФУНКЦИЈА:
     Форматира Excel од BytesIO и враќа нов BytesIO со комплет форматирање.
@@ -536,17 +553,30 @@ def format_broker_excel_in_memory(excel_io: io.BytesIO, sheet_name="Sheet1", pro
     # ----------------------------------------------------
     # 7. TOTAL SUM IN T
     # ----------------------------------------------------
-    last_row = ws.max_row + 1
+    last_data_row = ws.max_row
+    total_row = last_data_row + 1
+    total_mkd_row = last_data_row + 2
 
-    ws[f"S{last_row}"] = "Vkupno provizija:"
-    ws[f"S{last_row}"].font = bold
+    ws[kurs_cell] = float(kurs or 0)
+    ws.column_dimensions[kurs_cell.rstrip("0123456789")].hidden = True
 
-    ws[f"T{last_row}"] = f"=SUM(T2:T{last_row-1})"
-    ws[f"T{last_row}"].font = bold
-    ws[f"T{last_row}"].number_format = "#,##0.00"
+    ws[f"S{total_row}"] = "Vkupno provizija (EUR):"
+    ws[f"S{total_row}"].font = bold
 
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=last_row, column=col).border = border_all
+    ws[f"T{total_row}"] = f"=SUM(T2:T{last_data_row})"
+    ws[f"T{total_row}"].font = bold
+    ws[f"T{total_row}"].number_format = "#,##0.00"
+
+    ws[f"S{total_mkd_row}"] = "Vkupno provizija (MKD):"
+    ws[f"S{total_mkd_row}"].font = bold
+
+    ws[f"T{total_mkd_row}"] = f"=ROUND(SUM(T2:T{last_data_row})*{kurs_cell},0)"
+    ws[f"T{total_mkd_row}"].font = bold
+    ws[f"T{total_mkd_row}"].number_format = "#,##0"
+
+    for row in (total_row, total_mkd_row):
+        for col in range(1, ws.max_column + 1):
+            ws.cell(row=row, column=col).border = border_all
 
     # ----------------------------------------------------
     # 8. RETURN NEW BYTES

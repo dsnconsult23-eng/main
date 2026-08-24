@@ -3,63 +3,395 @@
 {% block title %}Reporting — Осигурување{% endblock %}
 
 {% block content %}
-<h1 style="margin-bottom: 1rem;">📈 Извештаи и Анализи за Осигурување</h1>
-
-<section style="background: #f9f9f9; padding: 1.5rem; border-radius: 8px; line-height: 1.6;">
-  <p>
-    Модулот <strong>„Reporting“</strong> овозможува целосен увид во сите клучни аспекти на работењето со полиси за животно осигурување.
-    Преку јасни визуелни прикази и детални табеларни извештаи, корисниците можат брзо да ги следат перформансите, трендовите и ризиците
-    во осигурителното портфолио.
-  </p>
-
-  <h3>🔍 Главни можности:</h3>
-  <ul>
-    <li>Преглед на активни, истечени и нови полиси по период, агенција или производ.</li>
-    <li>Анализа на премии по месеци, споредба со претходни периоди и трендови на раст.</li>
-    <li>Извештаи за доцнење на плаќања и ризични клиенти.</li>
-    <li>Откривање и прикажување на полиси со грешки или неконзистентни податоци.</li>
-    <li>Можност за експорт на извештаи во Excel или PDF формат за понатамошна анализа.</li>
-  </ul>
-
-  <h3>💡 Цел на системот:</h3>
-  <p>
-    Со овој модул, менаџерите, актуарите и агентите можат полесно да донесуваат одлуки базирани на податоци,
-    да ги следат клучните индикатори за успех и да го оптимизираат процесот на следење на осигурителното портфолио.
-  </p>
-
-  <hr style="margin: 2rem 0;">
-
-  {% if user.role == 'admin' %}
-  <h3>🚀 Брзи Акции:</h3>
-  <ul style="list-style: none; padding-left: 0;">
-      <li><a href="/siglife-report/ASO" class="button-link">🔎 АСО</a></li>
-      <li><a href="/siglife-report/MatematickaRezerva" class="button-link">📤 Математичка резерва</a></li>
-      <li><a href="/siglife-report/REO" class="button-link">🧾 Прегледи за РЕО</a></li>
-  </ul>
-  {% endif %}
-
-</section>
-{% endblock %}
-
-{% block styles %}
 <style>
-  .button-link {
-    display: inline-block;
-    margin: 0.5rem 0;
-    padding: 0.5rem 1rem;
-    background-color: #3498db;
-    color: white;
-    border-radius: 4px;
+  .dashboard-page {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .dashboard-hero,
+  .dashboard-panel,
+  .quick-action {
+    background: #fff;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(44, 62, 80, 0.08);
+  }
+
+  .dashboard-hero {
+    padding: 1.5rem;
+  }
+
+  .dashboard-kicker {
+    margin: 0 0 .45rem;
+    color: #607080;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-hero h1 {
+    margin: 0;
+    color: #203040;
+    font-size: 1.65rem;
+    line-height: 1.25;
+  }
+
+  .dashboard-hero p {
+    max-width: 920px;
+    margin: .8rem 0 0;
+    color: #4f6070;
+    line-height: 1.65;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+
+  .quick-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: .85rem;
+  }
+
+  .quick-info-card {
+    display: block;
+    min-height: 110px;
+    padding: 1rem;
+    background: #fff;
+    border: 1px solid #dbe3ea;
+    border-left: 4px solid #3498db;
+    border-radius: 8px;
+    color: #405060;
     text-decoration: none;
+    box-shadow: 0 8px 24px rgba(44, 62, 80, 0.08);
+    transition: border-color .18s ease, transform .18s ease, background .18s ease;
   }
-  .button-link:hover {
-    background-color: #2980b9;
+
+  .quick-info-card:hover {
+    border-color: #8eadc8;
+    border-left-color: #287fb9;
+    background: #f8fbfe;
+    transform: translateY(-1px);
   }
-  section ul {
-    margin-top: 0.5rem;
-    padding-left: 1.5rem;
+
+  .quick-info-card strong {
+    display: block;
+    margin-bottom: .35rem;
+    color: #203040;
+    font-size: 1rem;
+  }
+
+  .quick-info-card span {
+    display: block;
+    line-height: 1.45;
+  }
+
+  .metric-card {
+    min-height: 120px;
+    padding: 1rem;
+    background: #f8fafc;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+  }
+
+  .metric-card strong {
+    display: block;
+    margin-bottom: .4rem;
+    color: #203040;
+    font-size: 1rem;
+  }
+
+  .metric-card span {
+    display: block;
+    color: #5a6b7a;
+    line-height: 1.5;
+  }
+
+  .metric-card ul {
+    margin: .65rem 0 0;
+    padding-left: 1.1rem;
+    color: #5a6b7a;
+    line-height: 1.5;
+  }
+
+  .dashboard-panel {
+    padding: 1.25rem;
+  }
+
+  .dashboard-panel h2 {
+    margin: 0 0 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e7edf3;
+    color: #203040;
+    font-size: 1.25rem;
+  }
+
+  .feature-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: .75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .feature-list li {
+    padding: .85rem;
+    border: 1px solid #e1e8ef;
+    border-radius: 8px;
+    background: #fbfcfd;
+    color: #405060;
+    line-height: 1.45;
+  }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: .85rem;
+  }
+
+  .quick-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 76px;
+    padding: 1rem;
+    color: #203040;
+    font-weight: 700;
+    text-decoration: none;
+    transition: border-color .18s ease, transform .18s ease, background .18s ease;
+  }
+
+  .quick-action:hover {
+    border-color: #8eadc8;
+    background: #f4f9fd;
+    transform: translateY(-1px);
+  }
+
+  .quick-action span {
+    color: #3498db;
+    font-size: 1.2rem;
+  }
+
+  @media (max-width: 760px) {
+    .dashboard-hero h1 {
+      font-size: 1.35rem;
+    }
   }
 </style>
+
+<div class="dashboard-page">
+  {% set user_roles = user.get('roles') if user and user.get('roles') else ([user.get('role')] if user and user.get('role') else []) %}
+
+  <section class="dashboard-hero">
+    <p class="dashboard-kicker">Reporting</p>
+    <h1>Извештаи и анализи за осигурување</h1>
+    <p>
+      Централен преглед за следење на полиси, премии, ризици и оперативни извештаи.
+      Модулите подолу овозможуваат брз пристап до најважните работни текови за анализа и контрола.
+    </p>
+  </section>
+
+  <section class="quick-info-grid">
+    {% if user and 'admin' in user_roles %}
+    <a href="/siglife-report/users/create" class="quick-info-card">
+      <strong>Креирај корисник</strong>
+      <span>Додавање нов корисник и поставување пристап по улога.</span>
+    </a>
+    <a href="/siglife-report/aso_reports" class="quick-info-card">
+      <strong>ASO извештаи</strong>
+      <span>Прво отвори овде за регулаторни и месечни ASO прегледи.</span>
+    </a>
+    <a href="/siglife-report/provizia" class="quick-info-card">
+      <strong>Провизија</strong>
+      <span>Генерирање PDF/Excel, структура на агенти и испраќање маил.</span>
+    </a>
+    <a href="/siglife-report/Ponuda" class="quick-info-card">
+      <strong>Импорт на понуда</strong>
+      <span>Вчитување понуди од Excel и проверка на внесени податоци.</span>
+    </a>
+    <a href="/siglife-report/MatematickaRezerva" class="quick-info-card">
+      <strong>Математичка резерва</strong>
+      <span>Преглед и експорт на извештаи за математичка резерва.</span>
+    </a>
+    <a href="/siglife-report/REO" class="quick-info-card">
+      <strong>REO</strong>
+      <span>Преглед на REO извештаи и оперативни контроли.</span>
+    </a>
+    <a href="/siglife-report/ReportUdel" class="quick-info-card">
+      <strong>Преглед на удели</strong>
+      <span>Преглед и извоз на извештаи за удели.</span>
+    </a>
+    <a href="/siglife-report/PromenaUdeli" class="quick-info-card">
+      <strong>Промена на број на удели</strong>
+      <span>Пребарување по полиса, промена и бришење непрокнижени удели.</span>
+    </a>
+    <a href="/siglife-report/kolektivno-uu" class="quick-info-card">
+      <strong>Затворање на фактури со салдо нула</strong>
+      <span>Усогласување на уплати и затворање на полиси со нулта разлика.</span>
+    </a>
+    <a href="/siglife-report/report-fakturi" class="quick-info-card">
+      <strong>Фактури</strong>
+      <span>Преглед на фактури по полиса, фактура или ред; извоз за затварање.</span>
+    </a>
+    <a href="/siglife-report/Finansii" class="quick-info-card">
+      <strong>Финансии</strong>
+      <span>Салдирање и финансиски прегледи за тековна обработка.</span>
+    </a>
+    <a href="/siglife-report/FinansiskiIzvestai" class="quick-info-card">
+      <strong>Финансиски извештаи</strong>
+      <span>Биланс на успех, Cash Flow и подготовка за поврзување со база.</span>
+    </a>
+    <a href="/siglife-report/mesh" class="quick-info-card">
+      <strong>Mesh интеграција</strong>
+      <span>Следење и работа со Mesh интеграцијата.</span>
+    </a>
+    {% endif %}
+
+    {% if user and 'admin' not in user_roles %}
+      {% if 'users_create' in user_roles %}
+      <a href="/siglife-report/users/create" class="quick-info-card">
+        <strong>Креирај корисник</strong>
+        <span>Додавање нов корисник и поставување пристап по улога.</span>
+      </a>
+      {% endif %}
+      {% if 'aso_reports' in user_roles %}
+      <a href="/siglife-report/aso_reports" class="quick-info-card">
+        <strong>ASO извештаи</strong>
+        <span>Прво отвори овде за регулаторни и месечни ASO прегледи.</span>
+      </a>
+      {% endif %}
+      {% if 'provizia' in user_roles %}
+      <a href="/siglife-report/provizia" class="quick-info-card">
+        <strong>Провизија</strong>
+        <span>Генерирање PDF/Excel, структура на агенти и испраќање маил.</span>
+      </a>
+      {% endif %}
+      {% if 'ponuda' in user_roles %}
+      <a href="/siglife-report/Ponuda" class="quick-info-card">
+        <strong>Импорт на понуда</strong>
+        <span>Вчитување понуди од Excel и проверка на внесени податоци.</span>
+      </a>
+      {% endif %}
+      {% if 'matematicka_rezerva' in user_roles %}
+      <a href="/siglife-report/MatematickaRezerva" class="quick-info-card">
+        <strong>Математичка резерва</strong>
+        <span>Преглед и експорт на извештаи за математичка резерва.</span>
+      </a>
+      {% endif %}
+      {% if 'reo' in user_roles %}
+      <a href="/siglife-report/REO" class="quick-info-card">
+        <strong>REO</strong>
+        <span>Преглед на REO извештаи и оперативни контроли.</span>
+      </a>
+      {% endif %}
+      {% if 'report_udel' in user_roles %}
+      <a href="/siglife-report/ReportUdel" class="quick-info-card">
+        <strong>Преглед на удели</strong>
+        <span>Преглед и извоз на извештаи за удели.</span>
+      </a>
+      <a href="/siglife-report/PromenaUdeli" class="quick-info-card">
+        <strong>Промена на број на удели</strong>
+        <span>Пребарување по полиса, промена и бришење непрокнижени удели.</span>
+      </a>
+      {% endif %}
+      {% if 'finansii' in user_roles or 'finance' in user_roles %}
+      <a href="/siglife-report/kolektivno-uu" class="quick-info-card">
+        <strong>Затворање на фактури со салдо нула</strong>
+        <span>Избор и затворање на фактури каде позитивните и негативните ставки се поништуваат.</span>
+      </a>
+      <a href="/siglife-report/Finansii" class="quick-info-card">
+        <strong>Финансии</strong>
+        <span>Салдирање и финансиски прегледи за тековна обработка.</span>
+      </a>
+      {% endif %}
+      {% if 'aso_reports' in user_roles or 'finansii' in user_roles or 'finance' in user_roles %}
+      <a href="/siglife-report/report-fakturi" class="quick-info-card">
+        <strong>Преглед на фактури</strong>
+        <span>Преглед на фактури по полиса, фактура или ред; извоз за затварање.</span>
+      </a>
+      {% endif %}
+      {% if 'finansiski_izvestai' in user_roles or 'finance' in user_roles %}
+      <a href="/siglife-report/FinansiskiIzvestai" class="quick-info-card">
+        <strong>Финансиски извештаи</strong>
+        <span>Биланс на успех, Cash Flow и подготовка за поврзување со база.</span>
+      </a>
+      {% endif %}
+      {% if 'kontrola_polisi' in user_roles %}
+      <a href="/siglife-report/kontrola-polisi" class="quick-info-card">
+        <strong>Контрола на полиси</strong>
+        <span>Проверка на откуп/капитализација, обновени и активни полиси со недостасувачки фактури.</span>
+      </a>
+      {% endif %}
+      {% if 'mesh' in user_roles %}
+      <a href="/siglife-report/mesh" class="quick-info-card">
+        <strong>Mesh интеграција</strong>
+        <span>Следење и работа со Mesh интеграцијата.</span>
+      </a>
+      {% endif %}
+    {% endif %}
+
+    {% if user and ('admin' in user_roles or 'izvestuvanja' in user_roles) %}
+    <a href="/siglife-report/izvestuvanja" class="quick-info-card">
+      <strong>Известувања</strong>
+      <span>Подготовка, генерирање и праќање известувања до клиенти.</span>
+    </a>
+    {% endif %}
+
+    {% if user and ('admin' in user_roles or 'aml' in user_roles) %}
+    <a href="/siglife-report/AML" class="quick-info-card">
+      <strong>AML проверка</strong>
+      <span>Брз увид за клиенти и записи што треба да се проверат.</span>
+    </a>
+    {% endif %}
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="metric-card">
+      <strong>Полиси и портфолио</strong>
+      <span>Брз преглед што најчесто треба да се провери:</span>
+      <ul>
+        <li>активни, истечени и нови полиси</li>
+        <li>период, агенција и производ</li>
+        <li>портфолио со промени или отстапувања</li>
+      </ul>
+    </div>
+    <div class="metric-card">
+      <strong>Премии и трендови</strong>
+      <span>Анализа на премии по месеци, споредба со претходни периоди и движења на раст.</span>
+    </div>
+    <div class="metric-card">
+      <strong>Ризици и контроли</strong>
+      <span>Следење на доцнење на плаќања, ризични клиенти и неконзистентни податоци.</span>
+    </div>
+  </section>
+
+  <section class="dashboard-panel">
+    <h2>Главни можности</h2>
+    <ul class="feature-list">
+      <li>Детални табеларни извештаи за портфолио и производство.</li>
+      <li>Визуелни прегледи за перформанси, трендови и споредби.</li>
+      <li>Извештаи за податоци со грешки или потреба од дополнителна проверка.</li>
+      <li>Експорт во Excel или PDF за понатамошна анализа.</li>
+    </ul>
+  </section>
+
+  {% if user and 'admin' in user_roles %}
+  <section class="dashboard-panel">
+    <h2>Брзи акции</h2>
+    <div class="quick-actions">
+      <a href="/siglife-report/aso_reports" class="quick-action">АСО извештаи <span>›</span></a>
+      <a href="/siglife-report/MatematickaRezerva" class="quick-action">Математичка резерва <span>›</span></a>
+      <a href="/siglife-report/REO" class="quick-action">Прегледи за РЕО <span>›</span></a>
+    </div>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}
 
 {% set active = "dashboard" %}

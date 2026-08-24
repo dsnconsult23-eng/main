@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form, Depends
+from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import StreamingResponse, RedirectResponse,JSONResponse
 from fastapi.templating import Jinja2Templates
 from io import BytesIO
@@ -19,16 +19,23 @@ from fastapi.templating import Jinja2Templates
 
 import traceback
 from typing import Dict, Any, List, Optional
+from auth.role_utils import has_any_role
 
 router = APIRouter()
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 # ---------------- SESSION CHECK ----------------
+def ensure_aml_access(user):
+    if not has_any_role(user, "aml"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 def get_current_user(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    ensure_aml_access(user)
     return user
 
 
@@ -63,6 +70,7 @@ async def export_aml(
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    ensure_aml_access(user)
 
     # ---------------- BASE SQL ----------------
     sql = """
@@ -269,6 +277,7 @@ async def export_naplata(
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    ensure_aml_access(user)
 
     # ---------------- BASE SQL ----------------
     sql = """
@@ -479,6 +488,7 @@ def get_current_user(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    ensure_aml_access(user)
     return user
 
 

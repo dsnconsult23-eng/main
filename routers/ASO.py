@@ -6,10 +6,12 @@ import os
 from os.path import basename
 import locale
 from routers import Connection
+import re
 
 
 
 import  openpyxl
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Protection, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
@@ -33,6 +35,7 @@ def Directories(m,g):
         sep="/"
         configDIR="/opt/siglife-reporting/"        
         inputDIR="/opt/siglife-reporting/ASO/"+m+"_"+str(g)      
+    os.makedirs(inputDIR, exist_ok=True)
     return configDIR,inputDIR,sep
     
 def prebSI(mesec, godina):
@@ -130,26 +133,325 @@ def genSI(mesec, godina):
 import os
 from shutil import copyfile
 import openpyxl
+import zipfile
+
+
+def _get_statisticki_template_path(configDIR):
+    xlsx_path = os.path.join(configDIR, "statisticki_obrasci.xlsx")
+    xls_path = os.path.join(configDIR, "statisticki_obrasci.xls")
+
+    if os.path.isfile(xlsx_path):
+        return xlsx_path
+
+    if os.path.isfile(xls_path):
+        return None, (
+            f"GRESKA: Postoi {xls_path}, no ovoj kod raboti samo so "
+            "template fajl od tip .xlsx"
+        )
+
+    return None, f"GRESKA: Ne postoi {xlsx_path}"
+
+
+def _prepare_statisticki_output(mesec, godina):
+    configDIR, inputDIR, sep = Directories(str(mesec), str(godina))
+    template_result = _get_statisticki_template_path(configDIR)
+    if isinstance(template_result, tuple):
+        _, greska = template_result
+        return False, greska
+
+    mustra1 = template_result
+    fileOUT = os.path.join(inputDIR, f"statisticki_obrasci{mesec}-{godina}.xlsx")
+
+    try:
+        copyfile(mustra1, fileOUT)
+    except Exception as e:
+        greska = f"Mora da ja zatvorite {fileOUT} i pokusajte povtorno: {str(e)}"
+        return False, greska
+
+    if not zipfile.is_zipfile(fileOUT):
+        return False, f"GRESKA: Template fajlot ne e validen .xlsx: {mustra1}"
+
+    return True, (mustra1, fileOUT)
+
+
+def _open_statisticki_workbook(fileOUT):
+    return openpyxl.load_workbook(fileOUT)
+
+
+def _fetch_all_rows(sql, error_message):
+    print(sql)
+    results, OK = Connection.OSISinit()
+    if not OK:
+        return False, error_message
+
+    results.execute(sql)
+    rows = []
+    while True:
+        row = results.fetchone()
+        if not row:
+            break
+        rows.append(row)
+    results.close()
+    return True, rows
+
+
+def _excel_ref(col, row):
+    return f"{col}{row}" if row is not None else "0"
+
+
+def _get_stat_pregledi_template_path(configDIR):
+    candidates = [
+        os.path.join(configDIR, "Статистики - вчитување.xlsx"),
+        os.path.join(configDIR, "stat_pregledi_template.xlsx"),
+    ]
+
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+
+    return None, f"GRESKA: Ne postoi template za stat pregledi vo {configDIR}"
+
+
+def _prepare_named_template_output(mesec, godina, template_resolver, output_name):
+    configDIR, inputDIR, sep = Directories(str(mesec), str(godina))
+    template_result = template_resolver(configDIR)
+    if isinstance(template_result, tuple):
+        _, greska = template_result
+        return False, greska
+
+    template_path = template_result
+    fileOUT = os.path.join(inputDIR, output_name)
+
+    try:
+        copyfile(template_path, fileOUT)
+    except Exception as e:
+        greska = f"Mora da ja zatvorite {fileOUT} i pokusajte povtorno: {str(e)}"
+        return False, greska
+
+    if not zipfile.is_zipfile(fileOUT):
+        return False, f"GRESKA: Template fajlot ne e validen .xlsx: {template_path}"
+
+    return True, (template_path, fileOUT)
+
+
+def _normalize_code(value):
+    if value is None:
+        return ""
+    text = str(value).strip()
+    lookalike_map = str.maketrans({
+        "а": "a", "А": "A",
+        "в": "b", "В": "B",
+        "с": "c", "С": "C",
+        "е": "e", "Е": "E",
+        "н": "h", "Н": "H",
+        "к": "k", "К": "K",
+        "м": "m", "М": "M",
+        "о": "o", "О": "O",
+        "р": "p", "Р": "P",
+        "т": "t", "Т": "T",
+        "у": "y", "У": "Y",
+        "х": "x", "Х": "X",
+    })
+    text = text.translate(lookalike_map)
+    if text.endswith(".0"):
+        text = text[:-2]
+    text = re.sub(r"[^0-9A-Za-z_-]", "", text)
+    return text
+
+
+def _collect_header_codes(ws, header_row, start_col):
+    codes = []
+    col = start_col
+    empty_count = 0
+
+    while empty_count < 3 and col <= ws.max_column:
+        value = ws.cell(row=header_row, column=col).value
+        code = _normalize_code(value)
+        if code:
+            codes.append((col, code))
+            empty_count = 0
+        else:
+            empty_count += 1
+        col += 1
+
+    return codes
+
+
+def _clear_sheet_values(ws, start_row, start_col, end_col):
+    for row in range(start_row, ws.max_row + 1):
+        for col in range(start_col, end_col + 1):
+            cell = ws.cell(row=row, column=col)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.value = None
+
+
+def _clear_dynamic_rows(ws, start_row):
+    _clear_sheet_values(ws, start_row, 1, ws.max_column)
+
+
+def _build_stat_query(report_code, field_names):
+    fields_sql = ", ".join(field_names)
+    return (
+        f"SELECT {fields_sql} "
+        f"FROM stat_izvestai "
+        f"WHERE stat_izvestaj = '{report_code}' "
+        f"AND datum = LAST_DAY(mdy({mesec_placeholder},1,{godina_placeholder})) "
+        f"ORDER BY stat_izvestaiid"
+    )
+
+
+mesec_placeholder = "{mesec}"
+godina_placeholder = "{godina}"
+
+
+def _fetch_stat_rows(report_code, mesec, godina, field_names):
+    sql = _build_stat_query(report_code, field_names).format(mesec=mesec, godina=godina)
+    return _fetch_all_rows(sql, f"Greska - nema vrska so baza za {report_code}")
+
+
+def _write_static_report_sheet(ws, report_code, mesec, godina, start_row=10, code_col=2, data_start_col=3, header_row=9):
+    header_codes = _collect_header_codes(ws, header_row, data_start_col)
+    if not header_codes:
+        return
+
+    db_fields = ["vid_stavka"] + [f"kol{code}" for _, code in header_codes]
+    ok, rows = _fetch_stat_rows(report_code, mesec, godina, db_fields)
+    if not ok:
+        raise RuntimeError(rows)
+
+    _clear_sheet_values(ws, start_row, data_start_col, header_codes[-1][0])
+
+    code_to_row = {}
+    for row_idx in range(start_row, ws.max_row + 1):
+        existing_code = _normalize_code(ws.cell(row=row_idx, column=code_col).value)
+        if existing_code:
+            code_to_row[existing_code] = row_idx
+
+    next_row = max(ws.max_row + 1, start_row)
+    for row in rows:
+        row_code = _normalize_code(row[0])
+        if not row_code:
+            continue
+
+        target_row = code_to_row.get(row_code)
+        if target_row is None:
+            target_row = next_row
+            next_row += 1
+            code_cell = ws.cell(row=target_row, column=code_col)
+            if not isinstance(code_cell, MergedCell):
+                code_cell.value = row_code
+
+        for idx, (col_idx, _) in enumerate(header_codes, start=1):
+            cell = ws.cell(row=target_row, column=col_idx)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.value = row[idx]
+
+
+def _write_dynamic_report_sheet(ws, report_code, mesec, godina, field_names, start_row):
+    ok, rows = _fetch_stat_rows(report_code, mesec, godina, field_names)
+    if not ok:
+        raise RuntimeError(rows)
+
+    _clear_dynamic_rows(ws, start_row)
+
+    row_idx = start_row
+    for row in rows:
+        for col_idx, value in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.value = value
+        row_idx += 1
+
+
+def GenerateStatPregledi(mesec, godina):
+    ok, prepared = _prepare_named_template_output(
+        mesec,
+        godina,
+        _get_stat_pregledi_template_path,
+        f"stat_pregledi{mesec}-{godina}.xlsx"
+    )
+    if not ok:
+        return False, prepared
+
+    _, fileOUT = prepared
+
+    try:
+        wb = _open_statisticki_workbook(fileOUT)
+
+        header_ws = wb["Header"]
+        header_ws["B5"] = int(godina)
+        header_ws["B6"] = ((int(mesec) - 1) // 3) + 1
+
+        static_sheets = [
+            ("STA_SP1_ZO", "SP-1"),
+            ("STA_SP2_ZO", "SP-2"),
+            ("STA_SP3_ZO", "SP-3"),
+            ("STA_SP4_ZO", "SP-4"),
+            ("STA_SP4_RS_ZO", "SP-4-RS"),
+            ("STA_SP7_ZO", "SP-7"),
+        ]
+
+        for sheet_name, report_code in static_sheets:
+            if sheet_name in wb.sheetnames:
+                _write_static_report_sheet(wb[sheet_name], report_code, mesec, godina)
+
+        if "STA_SP4_VU_MR - 978" in wb.sheetnames:
+            _write_dynamic_report_sheet(
+                wb["STA_SP4_VU_MR - 978"],
+                "SP-4-MR",
+                mesec,
+                godina,
+                ["vid_stavka", "kol101_1"],
+                start_row=10
+            )
+
+        if "STA_SP4_VU_MR - 807" in wb.sheetnames:
+            _write_dynamic_report_sheet(
+                wb["STA_SP4_VU_MR - 807"],
+                "SP-4-MR",
+                mesec,
+                godina,
+                ["vid_stavka", "kol101_2"],
+                start_row=10
+            )
+
+        if "STA_SP6_ZO" in wb.sheetnames:
+            _write_dynamic_report_sheet(
+                wb["STA_SP6_ZO"],
+                "SP-6",
+                mesec,
+                godina,
+                ["client_name", "vid_stavka", "kol101", "kol102", "kol103"],
+                start_row=9
+            )
+
+        if "STA_SP8_ZO" in wb.sheetnames:
+            _write_dynamic_report_sheet(
+                wb["STA_SP8_ZO"],
+                "SP-8",
+                mesec,
+                godina,
+                ["client_name", "vid_stavka", "kol101", "kol102", "kol103", "kol200", "kol300"],
+                start_row=9
+            )
+
+        # Leave REO sheets intact if there is no generated source for them yet.
+        wb.save(fileOUT)
+    except Exception as e:
+        greska = f"GRESKA: Ne mozhe da se zapise vo {fileOUT}: {str(e)}"
+        return False, greska
+
+    return True, fileOUT
 
 def ImportSI(mesec, godina):
     # File handling
-    mu1 = "statisticki_obrasci.xlsx"
-    configDIR, inputDIR, sep = Directories(str(mesec), str(godina))
-    mustra1 = os.path.join(configDIR, mu1)
-
-    if not os.path.isfile(mustra1):
-        greska = f"GRESKA: Ne postoi {mustra1}"
-        return False, greska
-
-    mu12 = f"statisticki_obrasci{mesec}-{godina}.xlsx"
-    fileOUT = os.path.join(inputDIR, mu12)
-
-    if os.path.isfile(mustra1):       
-        try:
-            copyfile(mustra1, fileOUT)
-        except Exception as e:
-            greska = f"Mora da ja zatvorite {fileOUT} i pokusajte povtorno: {str(e)}"
-            return False, greska
+    ok, prepared = _prepare_statisticki_output(mesec, godina)
+    if not ok:
+        return False, prepared
+    _, fileOUT = prepared
 
     OK, podatoci, msg = genSI(mesec, godina)
     if not OK:
@@ -157,7 +459,7 @@ def ImportSI(mesec, godina):
 
     # Write `podatoci` to Excel
     try:
-        wb = openpyxl.load_workbook(fileOUT)
+        wb = _open_statisticki_workbook(fileOUT)
         sheet = wb.worksheets[17]  # 18th sheet (index 17)
         
         # Write data starting from row 13 and column C
@@ -184,26 +486,13 @@ def ImportSI(mesec, godina):
         greska = f"GRESKA: Ne mozhe da se zapise vo {fileOUT}: {str(e)}"
         return False, greska
 
-    return True, "\n\nRezultat zapisan vo "+fileOUT
+    return True, fileOUT
     
 def ImportSP1(mesec, godina):
-    mu1 = "statisticki_obrasci.xlsx"
-    configDIR, inputDIR, sep = Directories(str(mesec), str(godina))
-    mustra1 = os.path.join(configDIR, mu1)
-
-    if not os.path.isfile(mustra1):
-        greska = f"GRESKA: Ne postoi {mustra1}"
-        return False, greska
-
-    mu12 = f"statisticki_obrasci{mesec}-{godina}.xlsx"
-    fileOUT = os.path.join(inputDIR, mu12)
-
-    if os.path.isfile(mustra1):       
-        try:
-            copyfile(mustra1, fileOUT)
-        except Exception as e:
-            greska = f"Mora da ja zatvorite {fileOUT} i pokusajte povtorno: {str(e)}"
-            return False, greska
+    ok, prepared = _prepare_statisticki_output(mesec, godina)
+    if not ok:
+        return False, prepared
+    _, fileOUT = prepared
     # Define the custom order for `vid_stavka`
     custom_order = [
         "19010101", "19010102", "19010103", "19010104", "19010105",
@@ -223,21 +512,9 @@ def ImportSP1(mesec, godina):
         "WHERE stat_izvestaj = 'SP-1' and  vid_stavka not  in ('19','190101','190201','190202','0000') AND datum = LAST_DAY(mdy({},1,{}))".format(mesec, godina) 
     )
 
-    print(sql)
-    results, OK = Connection.OSISinit()
-    if not OK:
-        return False, "Greska - nema vrska so baza"
-
-    results.execute(sql)
-
-    podatoci = []
-    while True:
-        row = results.fetchone()
-        if not row:
-            break
-        podatoci.append(row)
-
-    results.close()
+    ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza")
+    if not ok:
+        return False, podatoci
 
     # Filter and sort data
     filtered_data = [row for row in podatoci if row[0] in custom_order]
@@ -245,7 +522,7 @@ def ImportSP1(mesec, godina):
 
     # Write to Excel
     try:
-        wb = openpyxl.load_workbook(fileOUT)
+        wb = _open_statisticki_workbook(fileOUT)
         sheet = wb.worksheets[17]  # 18th sheet (index 17)
 
         start_row = 13
@@ -268,31 +545,15 @@ def ImportSP1(mesec, godina):
     except Exception as e:
         return False, f"GRESKA: Ne mozhe da se zapise vo fajlot: {str(e)}"
 
-    return True, "Podatocite se zapisani uspesno."
+    return True, fileOUT
 
 
 def ImportSISp11(mesec, godina):
     # Define directories and file paths
-    mu1 = "statisticki_obrasci.xlsx"
-    configDIR, inputDIR, sep = Directories(str(mesec), str(godina))
-    print(mu1, configDIR, inputDIR)
-    mustra1 = os.path.join(configDIR, mu1)
-    print(mustra1)
-
-    if not os.path.isfile(mustra1):                                                                                                       
-        greska = f"GRESKA: Ne postoi {mustra1}"
-        return False, greska
-
-    mu12 = f"statisticki_obrasci{mesec}-{godina}.xlsx"
-    print(mu12)
-    fileOUT = os.path.join(inputDIR, mu12)
-
-    if os.path.isfile(mustra1):       
-        try: 
-            copyfile(mustra1, fileOUT)
-        except:
-            greska = f"\n\nMora da ja zatvorite {fileOUT} i pokusajte povtorno"
-            return False, greska
+    ok, prepared = _prepare_statisticki_output(mesec, godina)
+    if not ok:
+        return False, prepared
+    _, fileOUT = prepared
 
     # Generate the data to be written to the Excel file
     OK, podatoci, rez = genSI(mesec, godina) 
@@ -321,7 +582,7 @@ def ImportSISp11(mesec, godina):
 
     try:
         # Open the Excel file
-        wb = openpyxl.load_workbook(fileOUT)
+        wb = _open_statisticki_workbook(fileOUT)
         sheet = wb.worksheets[17]  # Select the desired sheet by index or name
 
         for row in podatoci: 
@@ -350,19 +611,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-2"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-2")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {14, 21, 25, 30, 31, 37, 53}
         row_column_to_skip = {(16, 5), (16, 9), (16, 13),  (19, 5), (19, 9), (19, 13),
                               (20, 5), (20, 9), (20, 13), (21, 5), (21, 9), (21, 13),
@@ -422,19 +673,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-3"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-3")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {14, 21, 25, 30, 31, 37, 53}
         row_column_to_skip = {(21, 6), (22, 6), (23, 6),  (24, 6),
                               (38, 6),  (39, 6) , (40, 6),(41, 6)}
@@ -480,19 +721,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-4"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-4")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {14, 21, 25, 30, 31, 37, 53}
         row_column_to_skip = {}
 
@@ -537,19 +768,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-5"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-5")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {26}
         row_column_to_skip = {}
 
@@ -585,19 +806,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-7"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-7")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {}
         row_column_to_skip = {}
 
@@ -637,19 +848,9 @@ def ImportSISp11(mesec, godina):
         )
 
 
-        print(sql)
-        results, OK = Connection.OSISinit()
-        if not OK:
-            return False, "Greska - nema vrska so baza za Sp-6"
-
-        results.execute(sql)
-
-        podatoci = []
-        while True:
-            row = results.fetchone()
-            if not row:
-                break
-            podatoci.append(row)
+        ok, podatoci = _fetch_all_rows(sql, "Greska - nema vrska so baza za Sp-6")
+        if not ok:
+            return False, podatoci
         rows_to_skip = {16}
         row_column_to_skip = {(12,6),(13,6),(14,6),(15,6)}
         vid_stavka_start_row = { '100(1)', '100(2)', '100(3)', '100(99)'  }
@@ -662,6 +863,12 @@ def ImportSISp11(mesec, godina):
         sheet = wb.worksheets[24]  # Target worksheet
 
         current_row = 20  # Start inserting rows dynamically from row 20
+        start_row300 = None
+        start_row4001 = None
+        start_row4002 = None
+        start_row4003 = None
+        start_row4009 = None
+        start_row9999 = None
 
         for row in podatoci:
             vid_stavka = row[0]
@@ -744,10 +951,6 @@ def ImportSISp11(mesec, godina):
                         start_row4009=target_row
                         print(f"start_row4009 {start_row4009}")
 
-                    print(f"start_row4001 {start_row4001}")
-                    
-                    
-                    
                 if vid_stavka.startswith("400(1)"):       
                     formula_cell = sheet.cell(row=start_row4001, column=4)  # Adjust as needed
                     formula = f"=SUM(D{start_row4001+1}:D{current_row-1})"
@@ -815,15 +1018,27 @@ def ImportSISp11(mesec, godina):
                 current_row += 1 
                 formula_cell = sheet.cell(row=current_row, column=4)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=D11+D16+D{start_row300}+D{start_row4001}+D{start_row4002}+D{start_row4003}+D{start_row4009}+D{start_row9999}"
+                formula = (
+                    f"=D11+D16+{_excel_ref('D', start_row300)}+{_excel_ref('D', start_row4001)}+"
+                    f"{_excel_ref('D', start_row4002)}+{_excel_ref('D', start_row4003)}+"
+                    f"{_excel_ref('D', start_row4009)}+{_excel_ref('D', start_row9999)}"
+                )
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=5)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=E11+E16+E{start_row300}+E{start_row4001}+E{start_row4002}+E{start_row4003}+E{start_row4009}+E{start_row9999}"
+                formula = (
+                    f"=E11+E16+{_excel_ref('E', start_row300)}+{_excel_ref('E', start_row4001)}+"
+                    f"{_excel_ref('E', start_row4002)}+{_excel_ref('E', start_row4003)}+"
+                    f"{_excel_ref('E', start_row4009)}+{_excel_ref('E', start_row9999)}"
+                )
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=6)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=F11+F16+F{start_row300}+F{start_row4001}+F{start_row4002}+F{start_row4003}+F{start_row4009}+F{start_row9999}"
+                formula = (
+                    f"=F11+F16+{_excel_ref('F', start_row300)}+{_excel_ref('F', start_row4001)}+"
+                    f"{_excel_ref('F', start_row4002)}+{_excel_ref('F', start_row4003)}+"
+                    f"{_excel_ref('F', start_row4009)}+{_excel_ref('F', start_row9999)}"
+                )
                 formula_cell.value = formula
                 
 
@@ -875,6 +1090,9 @@ def ImportSISp11(mesec, godina):
         sheet = wb.worksheets[26]  # Target worksheet
 
         current_row = 16  # Start inserting rows dynamically from row 20
+        start_row300 = None
+        start_row400 = None
+        start_row9999 = None
 
         for row in podatoci:
             vid_stavka = row[0]
@@ -987,23 +1205,23 @@ def ImportSISp11(mesec, godina):
                 current_row += 1  # Move to the next row 
             if vid_stavka.startswith("0000") :
                 formula_cell = sheet.cell(row=current_row, column=4)  # Adjust as needed
-                formula = f"=D11+D12+D{start_row300}+D{start_row400}+D{start_row9999}"
+                formula = f"=D11+D12+{_excel_ref('D', start_row300)}+{_excel_ref('D', start_row400)}+{_excel_ref('D', start_row9999)}"
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=5)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=E11+E12+E{start_row300}+E{start_row400}+E{start_row9999}"
+                formula = f"=E11+E12+{_excel_ref('E', start_row300)}+{_excel_ref('E', start_row400)}+{_excel_ref('E', start_row9999)}"
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=6)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=F11+F12+F{start_row300}+F{start_row400}+F{start_row9999}"
+                formula = f"=F11+F12+{_excel_ref('F', start_row300)}+{_excel_ref('F', start_row400)}+{_excel_ref('F', start_row9999)}"
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=7)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=G11+G12+G{start_row300}+G{start_row400}+G{start_row9999}"
+                formula = f"=G11+G12+{_excel_ref('G', start_row300)}+{_excel_ref('G', start_row400)}+{_excel_ref('G', start_row9999)}"
                 formula_cell.value = formula
                 formula_cell = sheet.cell(row=current_row, column=8)  # Adjust as needed
                 print (formula_cell)
-                formula = f"=H11+H12+H{start_row300}+H{start_row400}+H{start_row9999}"
+                formula = f"=H11+H12+{_excel_ref('H', start_row300)}+{_excel_ref('H', start_row400)}+{_excel_ref('H', start_row9999)}"
                 formula_cell.value = formula
             # Write data to cells
             if target_row:  # If a row was mapped or inserted
@@ -1026,16 +1244,7 @@ def ImportSISp11(mesec, godina):
     except Exception as e:
         greska = f"GRESKA: Ne mozhe da se zapise vo {fileOUT}: {str(e)}"
         return False, greska
-    try:
-        if platform.system() == "Windows":
-            os.startfile(fileOUT)
-        elif platform.system() == "Darwin":  # macOS
-            subprocess.call(["open", fileOUT])
-        else:  # Linux
-            subprocess.call(["xdg-open", fileOUT])
-    except Exception as e:
-        print(f"Could not open the Excel file: {str(e)}")
-    return OK, 'ok e'
+    return True, fileOUT
     
 def copy_formatting(source_row, target_row, sheet):
     # Iterate over each column in the source row to copy its formatting
@@ -1104,7 +1313,7 @@ def SP1analitika2(mesec, godina):
       AND skadenca_datum_od <= LAST_DAY(mdy({},1,{}))
       AND skadenca_datum_do >= LAST_DAY(mdy({},1,{}))
       AND o.par_statusid IN (17, 18, 13, 42)
-      AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({},1,{})))
+      AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({},1,{})))
     GROUP BY 1, 2      """.format(mesec, godina,mesec, godina,mesec, godina) 
 
     query2 = """
@@ -1116,7 +1325,7 @@ def SP1analitika2(mesec, godina):
       AND skadenca_datum_od <= LAST_DAY(mdy({},1,{}))
       AND skadenca_datum_do >= LAST_DAY(mdy({},1,{}))
       AND o.par_statusid IN (18)
-      AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid,LAST_DAY(mdy({},1,{})))
+      AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid,LAST_DAY(mdy({},1,{})))
     """.format(mesec, godina,mesec, godina,mesec, godina) 
 
     # Fetch data for both queries
@@ -1125,7 +1334,7 @@ def SP1analitika2(mesec, godina):
 
     if error1 or error2:
         print("Error fetching data")
-        return OK,"Error fetching data"
+        return False, "Error fetching data"
         exit()
 
     # Convert data to DataFrames
@@ -1155,17 +1364,7 @@ def SP1analitika2(mesec, godina):
         df2.to_excel(writer, sheet_name="Kapitailizirani polisi", index=False)
 
     print(f"Data exported to {mustra1}")
-    
-    try:
-        if platform.system() == "Windows":
-            os.startfile(mustra1)
-        elif platform.system() == "Darwin":  # macOS
-            subprocess.call(["open", fileOUT])
-        else:  # Linux
-            subprocess.call(["xdg-open", mustra1])
-    except Exception as e:
-        print(f"Could not open the Excel file: {str(e)}")
-    return OK,f"Data exported to {mustra1}"
+    return True, mustra1
 
 # Function to execute SQL queries and fetch results
 def fetch_query_results(sql):
@@ -1181,6 +1380,43 @@ def fetch_query_results(sql):
     rows = results.fetchall()  # Fetch all data
     results.close()
     return pd.DataFrame(rows, columns=columns)  # Convert to DataFrame
+
+
+def _write_query_sheets(writer, queries):
+    wrote_sheet = False
+    query_errors = []
+
+    for sheet_name, sql in queries.items():
+        print(f"Fetching data for {sheet_name}...")
+        try:
+            df = fetch_query_results(sql)
+            if df is None:
+                query_errors.append(f"{sheet_name}: no database connection")
+                continue
+
+            print(f"Writing {sheet_name} to Excel...")
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            wrote_sheet = True
+        except Exception as exc:
+            print(f"Error while generating sheet {sheet_name}: {exc}")
+            query_errors.append(f"{sheet_name}: {exc}")
+
+    if query_errors:
+        pd.DataFrame({"error": query_errors}).to_excel(
+            writer,
+            sheet_name="Errors",
+            index=False
+        )
+        wrote_sheet = True
+
+    if not wrote_sheet:
+        pd.DataFrame([{"message": "No data returned for the selected period."}]).to_excel(
+            writer,
+            sheet_name="Info",
+            index=False
+        )
+
+    return query_errors
     
 
 
@@ -1205,7 +1441,7 @@ def SP1analitika2(mesec, godina):
               AND skadenca_datum_od <= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND skadenca_datum_do >= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND o.par_statusid IN (17, 18, 13, 42)
-              AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})))
+              AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})))
             GROUP BY 1, 2;
         """,
 
@@ -1217,7 +1453,7 @@ def SP1analitika2(mesec, godina):
               AND skadenca_datum_od <= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND skadenca_datum_do >= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND o.par_statusid IN (18)
-              AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
+              AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
         """,
 
         "otkup": f"""
@@ -1228,7 +1464,7 @@ def SP1analitika2(mesec, godina):
               AND skadenca_datum_od <= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND skadenca_datum_do >= LAST_DAY(mdy({mesec}, 1, {godina}))
               AND o.par_statusid IN (20, 21)
-              AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
+              AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
         """,
 
         "skluceni_dogovori": f"""
@@ -1238,7 +1474,7 @@ def SP1analitika2(mesec, godina):
               AND o.os_ponudaid = p.os_ponudaid
               AND p.datum_polisa BETWEEN '01.01.{godina}' AND LAST_DAY(mdy({mesec}, 1, {godina}))
               AND o.par_statusid IN (17, 18)
-              AND ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, p.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
+              AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, p.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina})));
         """,
 
         "bruto_premija": f"""
@@ -1289,25 +1525,12 @@ def SP1analitika2(mesec, godina):
             raise
 
     with pd.ExcelWriter(mustra1, engine='openpyxl') as writer:
-        for sheet_name, sql in queries.items():
-            print(f"Fetching data for {sheet_name}...")
-            df = fetch_query_results(sql)
-            if df is not None:
-                print(f"Writing {sheet_name} to Excel...")
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
+        query_errors = _write_query_sheets(writer, queries)
 
     print(f"Data exported to {mustra1}")
-    
-    try:
-        if platform.system() == "Windows":
-            os.startfile(mustra1)
-        elif platform.system() == "Darwin":  # macOS
-            subprocess.call(["open", fileOUT])
-        else:  # Linux
-            subprocess.call(["xdg-open", mustra1])
-    except Exception as e:
-        print(f"Could not open the Excel file: {str(e)}")
-    return OK,f"Data exported to {mustra1}"
+    if query_errors:
+        return False, "; ".join(query_errors)
+    return True, mustra1
    
 
 def SP2analitika(mesec, godina):
@@ -1326,7 +1549,7 @@ def SP2analitika(mesec, godina):
             and o.os_ponudaid=t.os_ponudaid 
             and skadenca_datum_do between '01.01.{godina}' and LAST_DAY(mdy({mesec}, 1, {godina})) 
             and o.par_statusid in  ( 36,37,38,42) 
-            and ponuda_podbroj=maxpodbroj_datum(o.ponuda_broj , t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina}))  )
+            and o.ponuda_podbroj=maxpodbroj_datum(o.ponuda_broj , t.polisa_broj, o.os_produktid, LAST_DAY(mdy({mesec}, 1, {godina}))  )
 
             union
 
@@ -1367,25 +1590,12 @@ def SP2analitika(mesec, godina):
     print(mustra1)
 
     with pd.ExcelWriter(mustra1, engine='openpyxl') as writer:
-        for sheet_name, sql in queries.items():
-            print(f"Fetching data for {sheet_name}...")
-            df = fetch_query_results(sql)
-            if df is not None:
-                print(f"Writing {sheet_name} to Excel...")
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
+        query_errors = _write_query_sheets(writer, queries)
 
     print(f"Data exported to {mustra1}")
-    
-    try:
-        if platform.system() == "Windows":
-            os.startfile(mustra1)
-        elif platform.system() == "Darwin":  # macOS
-            subprocess.call(["open", fileOUT])
-        else:  # Linux
-            subprocess.call(["xdg-open", mustra1])
-    except Exception as e:
-        print(f"Could not open the Excel file: {str(e)}")
-    return OK,f"Data exported to {mustra1}"
+    if query_errors:
+        return False, "; ".join(query_errors)
+    return True, mustra1
    
 
 

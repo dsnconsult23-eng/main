@@ -1,0 +1,382 @@
+CREATE FUNCTION appuser.knizi_provizija_brokeri(tdatum_od date,tdatum_do date, tuser_id integer)
+         returning integer,char(100);
+{
+procedurata vraka:
+
+         - kod na greska
+                   1 ako se e ok i ako e izvrseno
+                  -1 ako se pojavi nekoja neregularnost
+         - poraka poradi koja e nastanata greskata }
+
+define  tkolku_naplati,tfin_stavkaid, tpar_clientid, tos_produkt_invest_fondid,tgodini_osiguruvanje,tpar_yearid,trata,tdali_cena_udel,tgodina,tpar_clientid_invest,tos_polisaid,tos_produkt_invest_smrtid  int;
+define tdatum_raganje,tdatum_ponuda,tdo_datum date;
+define tiznos_p,tiznos_p_den,tpremija_invest,tcena_udel_mkd,tcena_udel_eur,tbr_udel,tgama,alfa,tkamatna_stapka,beta,gp,tq_x_pr,tq_x dec; 
+define tusername varchar(30);
+define tpocetok_od,tosigurenik_par_client,tos_ponudaid,client_starost,tpar_Tablica_SmrtId,tbr_rati,tperiod_osig,tpar_nacin_platiid,tos_produkt_uplataid int;
+define tinvest_fond varchar(255);
+define tpremija_za_rata,tpremija_smrt,talfa_trosok ,tbeta_trosok ,     tgama_trosok ,     g_smrt,tprocent_smrt,db,tpremija_invest_den dec;
+define tpar_nacin_plati char(3);
+define tpol varchar(1);
+define tos_aneks_fakturaid,tos_aneksid,tos_produktid int;
+define _rb ,_br_stavka,_nalog1 integer;
+define _vid_osig int;
+define _kontod,_kontop,_kontod1, _kontop1, _kontoprmg,_konto_p_storno,_konto_storno_tek,_konto_p_peronalen chaR(10);
+define _oznaka,_f_inc_nal,tf_broj_avtom,tf_bukva char(1);
+define _client_id,_client_idd,_client_idp,_client_ids char(10);
+define _sif_filijala,_valuta_devd,_valuta_devp,_valuta_devs char(3);
+define _datum,_dat_valutad,_dat_valutap,_dat_valutas,_dat_valutad1,_dat_valutap1, tdatum_knizi,_datum_kurs,tdatum_aneks,tproverka_datum date;
+define _dokument_broj, _dokument_broj1 char(15);
+define _dokument_podbroj,_klasa,_tarifa,ttip_obrazec, _rklasa, _rtarifa char(2);
+define _iznos_premija_den,_iznos_premija,_iznos,_iznos_faktura_den,_iznos_faktura,_izn decimal(18,2);
+define _so_komd,_so_valutad,_so_komp,_so_valutap,_so_komd1,_so_valutad1,_so_komp1,_so_valutap1,_so_devp,_so_devd,_so_koms,_so_valutas,_so_devs char(1);
+define _edinica,_edinicamg,_kom_sif, _kon_sif char(2);
+define _valuta,tsifras char(3);
+define _sifra,_kolku,sifra_storno_vonbil integer;
+define _sif_tip_knizi,_sif_tip_knizi1,_sif_tip_dokument, tsif_tip_knizi char(5);
+define _polisa_broj char(12);
+define _dok_opis,_ponuda_broj char(50);
+define _sektor char(9);
+define _nalog char(10);
+define _f_nalog,_klasa_nalvid char(2);
+define _kraen_iznos,_kraen_iznos_den,v_iznos_den,v_iznos,_iznos_d, _iznos_d_den,_iznos_devd,_iznos_devp,_kurs,_iznos_devs,tiznos_valuta_isplata,_iznos_s_den decimal;
+define _proveri_kolku,_ima_obrazec,_rez_prepecateni,storno_vb,_os_ponudaid,tl_stetaid,ttpar_tip_stetaid integer;
+define _kltar,tpar_year char(4);
+define _obrazec_br char(7);
+define _poraka_prepecateni chaR(100);
+define _zadolzuva_lice char(10);
+define _tip_obrazec char(2);
+define v_datum date;
+define v_premija decimal;
+define _koefd,_koefp decimal;
+define v_ind,tf_rs char(1);
+define v_kolku,kolku_nalog,haha integer;
+define _skadencA_od date;
+define _err_msg char(100);
+define _godina,_nal_vid,tnal_vid char(4);
+define _dolzina,i,m,toperator,_par_tip_kniziid,_par_valutaid,trok_vrakanje int;
+define tsfin_stavkaid char(10);
+define _par_clientid,_par_filijalaid,_par_yearid, _os_polisaid,_fin_stavkaid,tos_zaemid,tos_zaem_amort_planid,tts_tar_grupaid,tts_klasaid,tts_tarifaid,tpar_prod_kanalid int;
+define tpar_tip_dokument,tpar_tip_steta,ttip_konto,tsap_profit_center varchar(5);
+define tpar_tip_dokumentid,tos_udel_kupiid int;
+define tSteta_broj,tklasa,tsap_rizik,tsap_distribution_channel varchar(20);
+define  tbroker_name varchar(100);
+define  tprov_vk ,tprovizija,_iznos_p_den dec;
+
+
+ on exception
+     ROLLBACK WORK;
+         return -1,'НАСТАНАТА Е ГРЕШКА'; 
+      end exception;
+
+--set debug file to "err_knizi_provizija_brokeri.sql"; 
+--trace on;
+
+set isolation to dirty read;
+
+BEGIN WORK;
+
+
+let toperator=tuser_id;
+
+
+select username into tusername from adm_user
+where userid=tuser_id;
+
+
+select  kn_edinica,nvl(kn_edinica_mg,kn_edinica) into _edinica,_edinicamg
+from org_company;
+let _rb = 0;
+
+IF year(tdatum_do) =year(today) then
+	let _edinica=_edinica;
+ELSE
+	let _edinica=_edinicamg;
+END IF
+
+let _godina= year(tdatum_do);
+let _nal_vid='ВФ';
+let _valuta='EUR';
+
+		let _kom_sif  =null;
+                let _f_inc_nal = null;
+                select kom_sif,f_inc_nal, kon_sif into _kom_sif,_f_inc_nal, _kon_sif
+                from edinica
+                where edinica = _edinica;
+
+                select br_nalog into  _nalog1 from nal_vid where edinica=_edinica and nal_vid=_nal_vid ;
+                let _nalog1=_nalog1+1;
+                let _nalog = _nalog1;
+                let _br_stavka = 0;
+
+
+foreach 
+select broker,broker_name, sum(iznos_provizija ) 
+into _par_clientid , tbroker_name , tprov_vk 
+ from provizija_client
+where pap_datumod=tdatum_od
+and pap_datumdo=tdatum_do
+
+group by 1 ,2
+		select  par_client, par_prod_kanalid  into _client_id,tpar_prod_kanalid
+		from par_client 
+		where par_clientid=_par_clientid;	
+
+if tpar_prod_kanalid in (58,62)  then 
+  let  _kontod='4300';
+  let _kontop='2340';
+  if tpar_prod_kanalid in (62)  then 
+   let  _kontod='4300';
+  let _kontop='2340';
+
+  end if; 
+  let tsap_distribution_channel='МК04';
+  
+    if tpar_prod_kanalid in (62)  then 
+  let tsap_distribution_channel='МК06';
+  end if; 
+else 
+   let  _kontod='4300';
+      let _kontop='2340';
+        let tsap_distribution_channel='МК03';
+  if tpar_prod_kanalid in (33)  then 
+   let  _kontod='4302';
+  let _kontop='2342';
+
+  end if;      
+ end if;   
+
+   
+   	let _so_komp = null;
+		let _so_valutap = null;
+	    select so_kom,so_valuta,so_dev into _so_komp,_so_valutap,_so_devp from  konto where konto =  trim(_kontop) and kon_sif=_kon_sif;
+		let _so_komp1 =_so_komp;
+		let _so_valutap1 = _so_valutap;
+
+foreach
+	select klasa,vrati_coverage_id_original(os_ponuda_detailid ), sum(iznos_provizija ) 
+	into tklasa,tsap_rizik, _iznos_d 
+	from provizija_client
+	where pap_datumod=tdatum_od
+	and pap_datumdo=tdatum_do
+	and broker=_par_clientid
+	group by 1 ,2
+
+
+			
+let _dokument_broj= month(tdatum_do)||'/'||year(tdatum_do);
+	let _dok_opis= tbroker_name;
+
+if tklasa = 'LF' then 
+ 	let  _kontod1=trim(_kontod)||'19';
+ 		let tsap_profit_center='30';
+end if;
+
+if tklasa = 'IN' then 
+ 	let  _kontod1=trim(_kontod)||'01';
+ 		let tsap_profit_center='30';
+end if;
+
+if tklasa = 'ZD' then 
+ 	let  _kontod1=trim(_kontod)||'02';
+ 		let tsap_profit_center='30';
+end if;
+
+
+if tklasa = 'TBS' then 
+ 	let  _kontod1=trim(_kontod)||'04';
+ 	let tsap_profit_center='30';
+end if;
+
+if tklasa = 'UL' then 
+ 	let  _kontod1=trim(_kontod)||'21';
+ 	let tsap_profit_center='31';
+end if; 
+
+
+  if tpar_prod_kanalid in (62)   then 
+ 	let  _kontod1=trim(_kontod1)||'1';
+  end if;
+
+
+		let _so_komd = null;
+		let _so_valutad = null;
+		select so_kom,so_valuta,so_dev  into _so_komd,_so_valutad,_so_devd 
+		from  konto where konto =  trim(_kontod1) and kon_sif=_kon_sif;
+		let _so_komd1 =_so_komd;
+		let _so_valutad1 = _so_valutad;
+
+	
+
+
+	
+
+	
+         select max(datum)  
+       into _datum_kurs
+      from dbosql_utf8:kurs 
+   	 where valuta=_valuta
+     and datum<=tdatum_do;
+        
+        select nvl(ind_sred,0) into _kurs
+        from dbosql_utf8:kurs 
+        where valuta=_valuta
+        and datum=_datum_kurs;
+        if _kurs<>0 then 
+        let _iznos_d_den=round(_iznos_d*_kurs);
+      	end if;
+      
+   
+
+			
+			if _so_komd <>'1' then
+				let _client_idd = null;
+			   else
+				let _client_idd =_client_id;
+		     end if;
+		     	
+		    if _so_devd <>'1' then
+				let _iznos_devd = _iznos_d_den;
+				let _valuta_devd = 'MKD';
+				let _kurs=1;
+			else
+				let _iznos_devd = _iznos_d;
+				let _valuta_devd = _valuta;
+		    end if;
+
+	     		if _so_valutad not in ('1') then
+				let _dat_valutad = null;
+			else
+				let _dat_valutad = tdatum_do;
+		     	end if;
+
+			
+		
+		    
+		    
+			let _br_stavka = _br_stavka+1;
+			let _edinica=_edinica;
+			let _nal_vid=_nal_vid;
+			let _nalog=_nalog;
+			let _br_stavka=_br_stavka;
+			let tdo_datum=tdatum_do;
+
+		insert into stavka(     godina ,     edinica ,     nal_vid ,     nalog ,
+     br_stavka ,     dat_nalog ,     konto ,          komitent ,
+     kom_sif ,     dok_opis ,     dokument ,     dok_vid ,
+     datum_dok ,    sektor ,     datum_val ,     valuta ,     kurs ,     iznos_d ,
+     iznos_p ,     dev_iznos_d ,     dev_iznos_p ,ui ,
+     operator ,     last_update ,       kon_sif ,lang,sap_sektor,	sap_risk_business,		sap_distribution_channel,sap_profit_center)
+     values 
+     ( _godina,_edinica,_nal_vid, _nalog, _br_stavka, tdatum_do,_kontod1,_client_idd,
+					_kom_sif,_dok_opis,_dokument_broj,'PR',
+					tdatum_do,	'001',_dat_valutad,null,null,
+					_iznos_d_den ,null, null, null,'I',2,current, _kon_sif,'mk','01',tsap_rizik,tsap_distribution_channel,tsap_profit_center);
+
+ insert into stavka_tr(     godina ,     edinica ,     nal_vid ,     nalog ,
+     br_stavka ,     lang ) 
+     values (_godina,_edinica,_nal_vid, _nalog, _br_stavka,'mk');
+			
+     
+ end foreach; 
+ 
+ 
+     select max(datum)  
+       into _datum_kurs
+      from dbosql_utf8:kurs 
+   	 where valuta=_valuta
+     and datum<=tdatum_do;
+        
+        select nvl(ind_sred,0) into _kurs
+        from dbosql_utf8:kurs 
+        where valuta=_valuta
+        and datum=_datum_kurs;
+        if _kurs<>0 then 
+        let _iznos_p_den=round(tprov_vk*_kurs);
+      	end if;
+      
+ 
+ if _so_komp <>'1' then
+				let _client_idp = null;
+			else
+				let _client_idp = _client_id;
+	     		end if;
+
+			if _so_valutap not in ('1') then
+				let _dat_valutap = null;
+     			else
+				let _dat_valutap = tdatum_do;
+		     	end if;
+
+			  if _so_devp <>'1' then
+				let _iznos_devp = _iznos_p_den;
+				let _valuta_devp = 'MKD';
+				let _kurs=1;
+			else
+				let _iznos_devp = tprov_vk;
+				let _valuta_devp = _valuta;
+		    end if;
+			
+     
+     	let _br_stavka = _br_stavka+1;
+     		insert into stavka(     godina ,     edinica ,     nal_vid ,     nalog ,
+     br_stavka ,     dat_nalog ,     konto ,          komitent ,
+     kom_sif ,     dok_opis ,     dokument ,     dok_vid ,
+     datum_dok ,    sektor ,     datum_val ,     valuta ,     kurs ,     iznos_d ,
+     iznos_p ,     dev_iznos_d ,     dev_iznos_p ,ui ,
+     operator ,     last_update ,       kon_sif ,
+         lang ) 
+     values 
+     ( _godina,_edinica,_nal_vid, _nalog, _br_stavka, tdatum_do,_kontop,_client_idp,
+					_kom_sif,_dok_opis,_dokument_broj,'PR',
+					tdatum_do,	'001',_dat_valutad,null,null,
+					null,_iznos_p_den , null, null,'I',2,current, _kon_sif,'mk');
+
+
+			insert into stavka_tr(     godina ,     edinica ,     nal_vid ,     nalog ,
+     br_stavka ,     lang ) 
+     values (_godina,_edinica,_nal_vid, _nalog, _br_stavka,'mk');
+end foreach;
+     
+     	let _kolku = null;
+			select count(*) into _kolku
+			from nalog
+			where edinica = _edinica
+				and nal_vid  = _nal_vid
+				and nalog=_nalog;
+
+			if _kolku = 0 then
+			insert into nalog(     godina ,     edinica ,     nal_vid ,     nalog ,
+     datum ,          zaklucen ,        ui ,     operator ,
+     last_update ) 
+     values (_godina, _edinica, _nal_vid, _nalog, tdatum_do,0,'I' ,toperator,
+     current);
+			
+			
+			insert into nalog_tr(     godina ,     edinica ,     nal_vid ,
+     nalog ,     lang ) 
+     values ( _godina, _edinica, _nal_vid, _nalog, 'mk');
+			
+	
+			end if;
+
+		      
+       			        UPDATE nal_vid SET br_nalog=_nalog
+               			WHERE edinica=_edinica
+					AND nal_vid=_nal_vid;
+
+
+
+
+
+
+
+
+
+
+
+
+commit work;
+return '1','Книжењето е    завршено       успешно во налог '||_nal_vid||'/'||_nalog;
+
+end function;
+GO

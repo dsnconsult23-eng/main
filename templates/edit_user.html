@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Уреди корисник{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1rem;">Уреди корисник</h1>
+
+<div style="max-width: 760px; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,0.08);">
+  {% if error %}
+    <div style="background:#fdecea; color:#c0392b; padding:0.8rem 1rem; border-radius:6px; margin-bottom:1rem;">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  {% if success %}
+    <div style="background:#eafaf1; color:#1e8449; padding:0.8rem 1rem; border-radius:6px; margin-bottom:1rem;">
+      {{ success }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/siglife-report/users/{{ edit_user.id }}/edit">
+    <div style="margin-bottom: 1rem;">
+      <label style="display:block; font-weight:600; margin-bottom:0.4rem;">Email / Username</label>
+      <input type="email" value="{{ edit_user.username }}" readonly
+             style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px; background:#f4f6f8;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label for="full_name" style="display:block; font-weight:600; margin-bottom:0.4rem;">Име и презиме *</label>
+      <input type="text" id="full_name" name="full_name" value="{{ edit_user.full_name }}" required
+             style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display:block; font-weight:600; margin-bottom:0.4rem;">Улоги *</label>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.55rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; background:#fafafa;">
+        {% for role_value, role_label in role_options %}
+        <label style="display:flex; align-items:center; gap:0.55rem; font-weight:500;">
+          <input type="checkbox" name="role_name" value="{{ role_value }}" {% if role_value in edit_user.roles %}checked{% endif %}>
+          {{ role_label }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-bottom: 1.2rem;">
+      <label for="is_active" style="display:block; font-weight:600; margin-bottom:0.4rem;">Активен</label>
+      <select id="is_active" name="is_active"
+              style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
+        <option value="1" {% if edit_user.is_active == 1 %}selected{% endif %}>Да</option>
+        <option value="0" {% if edit_user.is_active != 1 %}selected{% endif %}>Не</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+      <button type="submit"
+              style="background:#3498db; color:white; border:none; padding:0.8rem 1.2rem; border-radius:6px; font-weight:600; cursor:pointer;">
+        Зачувај
+      </button>
+      <a href="/siglife-report/users"
+         style="background:#607080; color:white; text-decoration:none; padding:0.8rem 1.2rem; border-radius:6px; font-weight:600;">
+        Назад
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

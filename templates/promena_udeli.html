@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Промена на број на удели{% endblock %}
+
+{% block content %}
+<h1>Промена на број на удели</h1>
+
+<div class="card" style="margin:1rem 0 1.25rem;">
+  <form id="udelSearchForm" method="post" action="/siglife-report/PromenaUdeli/search" style="display:flex;gap:.75rem;align-items:end;flex-wrap:wrap;">
+    <div class="form-group" style="margin:0;">
+      <label for="udel_polisa">Број на полиса</label>
+      <input type="text" id="udel_polisa" name="polisa_broj" value="{{ udel_polisa | default('') }}"
+             placeholder="пр. 20/003845" required autofocus>
+    </div>
+    <button class="btn btn-primary" type="submit">Пребарај удели</button>
+  </form>
+
+  {% if udel_error %}<div class="alert alert-error" style="margin-top:.8rem;">{{ udel_error }}</div>{% endif %}
+  {% if udel_success %}<div class="alert alert-success" style="margin-top:.8rem;">{{ udel_success }}</div>{% endif %}
+
+  {% if udel_rows %}
+  <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:1rem;padding:.7rem;border:1px solid #dbe3ea;border-radius:6px;background:#f8fafc;">
+    <strong id="udelSelectedCount">Избрани: 0</strong>
+    <input id="bulkUdelAmount" type="number" step="0.000001" placeholder="Нов број на удели" style="width:175px;">
+    <button class="btn btn-primary" id="btnBulkUpdateUdel" type="button" disabled>Промени избрани</button>
+    <button class="btn btn-danger" id="btnBulkDeleteUdel" type="button" disabled>Избриши избрани</button>
+    <span id="udelBulkMessage" style="font-weight:700;"></span>
+  </div>
+  <div style="overflow-x:auto;margin-top:1rem;">
+    <table>
+      <thead><tr>
+        <th><input id="selectAllUdeli" type="checkbox" aria-label="Избери ги сите"></th>
+        <th>ID</th><th>Полиса</th><th>Број на понуда</th><th>Инвестициски фонд</th>
+        <th>Клиент</th><th>Трансакција</th><th>Број удели</th><th>Цена на удел</th><th>Премија</th><th>Акции</th>
+      </tr></thead>
+      <tbody>
+      {% for r in udel_rows %}
+        <tr>
+          <td><input class="udel-select" type="checkbox" value="{{ r.os_udel_kupiid }}" aria-label="Избери удел {{ r.os_udel_kupiid }}"></td>
+          <td>{{ r.os_udel_kupiid }}</td><td>{{ r.polisa_broj }}</td><td>{{ r.ponuda_broj }}</td>
+          <td>{{ r.invest_fond }}</td><td>{{ r.client_name }} ({{ r.par_clientid }})</td>
+          <td>
+            <span style="display:inline-block;padding:.25rem .55rem;border-radius:999px;font-weight:700;
+                         color:{% if r.transakcija == 'Продавање' %}#9b1c1c{% else %}#176b5d{% endif %};
+                         background:{% if r.transakcija == 'Продавање' %}#fde8e8{% else %}#e6f5f1{% endif %};">
+              {{ r.transakcija }}
+            </span>
+          </td>
+          <td>
+            <form method="post" action="/siglife-report/PromenaUdeli/update" style="display:flex;gap:.4rem;align-items:center;">
+              <input type="hidden" name="os_udel_kupiid" value="{{ r.os_udel_kupiid }}">
+              <input type="hidden" name="polisa_broj" value="{{ udel_polisa }}">
+              <input type="number" name="nov_br_udeli" value="{{ r.br_udel }}" step="0.000001" required style="width:145px;">
+              <button class="btn btn-primary" type="submit">Зачувај</button>
+            </form>
+          </td>
+          <td style="text-align:right;">{{ "%.6f"|format(r.cena_udel) }}</td>
+          <td style="text-align:right;">{{ "%.2f"|format(r.premija_invest) }}</td>
+          <td>
+            <form method="post" action="/siglife-report/PromenaUdeli/delete"
+                  onsubmit="return confirm('Дали сигурно сакате да го избришете уделот ID {{ r.os_udel_kupiid }} со {{ r.br_udel }} удели? Оваа акција е неповратна.');">
+              <input type="hidden" name="os_udel_kupiid" value="{{ r.os_udel_kupiid }}">
+              <input type="hidden" name="polisa_broj" value="{{ udel_polisa }}">
+              <button class="btn btn-danger" type="submit">Избриши</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(() => {
+  const boxes = [...document.querySelectorAll('.udel-select')];
+  if (!boxes.length) return;
+  const selectAll = document.getElementById('selectAllUdeli');
+  const count = document.getElementById('udelSelectedCount');
+  const updateButton = document.getElementById('btnBulkUpdateUdel');
+  const deleteButton = document.getElementById('btnBulkDeleteUdel');
+  const amountInput = document.getElementById('bulkUdelAmount');
+  const message = document.getElementById('udelBulkMessage');
+
+  const selectedIds = () => boxes.filter(box => box.checked).map(box => Number(box.value));
+  const refresh = () => {
+    const selected = selectedIds();
+    count.textContent = `Избрани: ${selected.length}`;
+    updateButton.disabled = selected.length === 0;
+    deleteButton.disabled = selected.length === 0;
+    selectAll.checked = selected.length === boxes.length;
+    selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length;
+    boxes.forEach(box => box.closest('tr').style.background = box.checked ? '#eef8f5' : '');
+  };
+  const showMessage = (text, error = false) => {
+    message.textContent = text;
+    message.style.color = error ? '#a00000' : '#1a6a1a';
+  };
+  const request = async (url, options) => {
+    const response = await fetch(url, options);
+    let data = {};
+    try { data = await response.json(); } catch (_) {}
+    if (!response.ok) throw new Error(data.detail || data.message || `Грешка ${response.status}`);
+    return data;
+  };
+
+  boxes.forEach(box => box.addEventListener('change', refresh));
+  selectAll.addEventListener('change', () => {
+    boxes.forEach(box => box.checked = selectAll.checked);
+    refresh();
+  });
+
+  updateButton.addEventListener('click', async () => {
+    const ids = selectedIds();
+    const amount = Number(amountInput.value);
+    if (!Number.isFinite(amount)) return showMessage('Внесете валиден нов број на удели.', true);
+    if (!confirm(`Да се промени бројот на удели за ${ids.length} избрани записи?`)) return;
+    updateButton.disabled = deleteButton.disabled = true;
+    try {
+      const data = await request('/siglife-report/PromenaUdeli/bulk-update', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ids, nov_br_udeli:amount})
+      });
+      showMessage(data.message);
+      document.getElementById('udelSearchForm').submit();
+    } catch (error) {
+      showMessage(error.message, true);
+      refresh();
+    }
+  });
+
+  deleteButton.addEventListener('click', async () => {
+    const ids = selectedIds();
+    if (!confirm(`Дали сигурно сакате да избришете ${ids.length} избрани записи? Акцијата е неповратна.`)) return;
+    updateButton.disabled = deleteButton.disabled = true;
+    try {
+      const data = await request('/siglife-report/PromenaUdeli/bulk-delete', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids})
+      });
+      showMessage(data.message);
+      document.getElementById('udelSearchForm').submit();
+    } catch (error) {
+      showMessage(error.message, true);
+      refresh();
+    }
+  });
+  refresh();
+})();
+</script>
+{% endblock %}

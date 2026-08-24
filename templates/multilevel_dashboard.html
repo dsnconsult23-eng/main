@@ -1,0 +1,724 @@
+{% extends "base.html" %}
+{% block title %}Multilevel Dashboard — Провизии{% endblock %}
+{% block content %}
+<style>
+  .ml-page { display:grid; gap:1rem; }
+  .ml-shell { border:1px solid #9bb9d2; border-radius:8px; background:#d8e8f6; overflow:hidden; box-shadow:0 8px 24px rgba(44,62,80,.08); }
+  .ml-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem 1.1rem; background:#0f4f8f; border-bottom:4px solid #89bde3; color:#fff; }
+  .ml-header h1 { margin:0; font-size:1.25rem; font-weight:900; letter-spacing:.3px; }
+  .ml-header button { min-height:32px; padding:0 .9rem; border:1px solid #b8d7ee; border-radius:6px; background:#fff; color:#0f4f8f; font-weight:800; cursor:pointer; font-size:.82rem; }
+  .ml-header button:hover { background:#e8f3fc; }
+
+  .filter-bar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; padding:.6rem 1rem; background:#e4f0fa; border-bottom:2px solid #b3d1ed; }
+  .filter-bar label { font-size:.78rem; font-weight:800; color:#1b4d75; }
+  .filter-bar select, .filter-bar input { height:32px; border:1px solid #9bb9d2; border-radius:5px; padding:0 .5rem; font-size:.82rem; background:#fff; color:#1b4d75; }
+  .filter-bar .btn-load { height:32px; padding:0 1.2rem; border-radius:5px; border:none; background:#1f6fb2; color:#fff; font-weight:800; font-size:.82rem; cursor:pointer; }
+  .filter-bar .btn-load:hover { background:#174f80; }
+
+  .ml-layout { display:grid; grid-template-columns:150px 1fr; gap:.7rem; padding:.75rem; }
+  .ml-slicer { border:1px solid #9bb9d2; border-radius:6px; background:#f7fbff; padding:.5rem; align-self:start; }
+  .slicer-title { background:#1f6fb2; color:#fff; border-radius:4px; padding:.3rem .4rem; font-size:.72rem; font-weight:800; margin-bottom:.35rem; text-align:center; }
+  .slicer-chip { display:block; width:100%; min-height:26px; margin:.2rem 0; border:1px solid #b8cfe2; border-radius:4px; background:#e7f2fb; color:#1b4d75; font-size:.72rem; font-weight:700; text-align:center; padding:.28rem .3rem; word-break:break-word; }
+  .slicer-chip.hi { background:#d4eaff; border-color:#6aaee0; color:#0f4f8f; font-weight:900; }
+
+  .kpi-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:.5rem; margin-bottom:.7rem; }
+  .kpi-card { border:1px solid #95b8d4; border-radius:7px; background:#fff; padding:.6rem .5rem; min-height:78px; box-shadow:inset 0 4px 0 #1f6fb2, 0 4px 10px rgba(31,111,178,.1); text-align:center; }
+  .kpi-label { color:#43657d; font-size:.65rem; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+  .kpi-value { color:#0f4f8f; font-size:1.18rem; font-weight:900; margin-top:.3rem; line-height:1.1; }
+  .kpi-sub  { color:#607080; font-size:.65rem; margin-top:.15rem; }
+
+  .dashboard-tabs { display:flex; gap:.3rem; margin-bottom:.6rem; border-bottom:2px solid #b8d4e8; }
+  .dashboard-tab { min-height:34px; padding:.42rem .8rem; border:1px solid #b8d4e8; border-radius:6px 6px 0 0; border-bottom:none; background:#edf6fc; color:#173f5f; font-size:.8rem; font-weight:800; cursor:pointer; margin-bottom:-2px; }
+  .dashboard-tab.is-active { background:#1f6fb2; border-color:#1f6fb2; color:#fff; }
+  .dashboard-view { display:none; }
+  .dashboard-view.is-active { display:block; }
+
+  .dash-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+  .dash-grid-3 { display:grid; grid-template-columns:1.3fr 0.7fr; gap:.75rem; }
+  .dash-box { border:1px solid #9bb9d2; border-radius:6px; background:#fff; padding:.75rem; overflow:hidden; box-shadow:0 4px 10px rgba(20,76,120,.08); }
+  .dash-box h3 { margin:-.75rem -.75rem .6rem; padding:.42rem .65rem; font-size:.84rem; color:#fff; background:#1f6fb2; font-weight:800; }
+  .dash-box h3.teal { background:#1a7a6e; }
+  .dash-box h3.purple { background:#5b2d8b; }
+  .dash-box h3.orange { background:#b85a00; }
+
+  .chart-svg { width:100%; display:block; }
+
+  .dash-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .dash-table th { color:#fff; background:#2a6496; font-size:.72rem; text-transform:uppercase; padding:.4rem .45rem; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }
+  .dash-table th:hover { background:#1f4f75; }
+  .dash-table th.sort-asc::after  { content:' ▲'; font-size:.65rem; }
+  .dash-table th.sort-desc::after { content:' ▼'; font-size:.65rem; }
+  .dash-table td { padding:.38rem .45rem; border-bottom:1px solid #eef2f6; vertical-align:middle; }
+  .dash-table tbody tr:hover { background:#f0f7ff; }
+  .dash-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .dash-table td.rank { text-align:center; color:#607080; font-size:.72rem; font-weight:700; }
+  /* Vo kontrolata crveno se samo sostojbi sto baraat korekcija. */
+  .dash-table tbody tr.control-error { background:#fff0f0; color:#8f1010; }
+  .dash-table tbody tr.control-error:hover { background:#ffe1e1; }
+  .dash-table tbody tr.control-info { background:#f7f9fb; color:#566573; }
+  .dash-table tbody tr.control-info:hover { background:#edf2f6; }
+  .dash-table tbody tr.control-warning { background:#fff9e8; color:#735b12; }
+  .dash-table tbody tr.control-warning:hover { background:#fff2c7; }
+  .bar-mini { display:inline-block; height:8px; border-radius:4px; background:#1f6fb2; vertical-align:middle; }
+
+  .status-bar { padding:.65rem 1rem; border-radius:0 0 8px 8px; background:#f7fbff; border-top:1px solid #d0e4f0; font-size:.82rem; font-weight:700; color:#405060; }
+  .status-bar.ok  { color:#1a6a1a; background:#f0fff0; }
+  .status-bar.err { color:#a00000; background:#fff5f5; }
+  .status-bar.loading { color:#1b4d75; }
+
+  @media (max-width:900px) {
+    .ml-layout { grid-template-columns:1fr; }
+    .kpi-grid { grid-template-columns:repeat(3, 1fr); }
+    .dash-grid-2, .dash-grid-3 { grid-template-columns:1fr; }
+    .dashboard-tabs { flex-wrap:wrap; }
+  }
+</style>
+
+<div class="ml-page">
+  <div class="ml-shell">
+    <div class="ml-header">
+      <h1>📊 Multilevel Dashboard — Провизии</h1>
+      <button id="btnReloadDashboard">⟳ Освежи</button>
+    </div>
+
+    <div class="filter-bar">
+      <label>Месец:</label>
+      <select id="filterMonth">
+        <option value="">— сите —</option>
+        <option value="1">Јануари</option><option value="2">Февруари</option>
+        <option value="3">Март</option><option value="4">Април</option>
+        <option value="5">Мај</option><option value="6">Јуни</option>
+        <option value="7">Јули</option><option value="8">Август</option>
+        <option value="9">Септември</option><option value="10">Октомври</option>
+        <option value="11">Ноември</option><option value="12">Декември</option>
+      </select>
+      <label>Година:</label>
+      <select id="filterYear">
+        <option value="">— сите —</option>
+        <option value="2022">2022</option><option value="2023">2023</option>
+        <option value="2024">2024</option><option value="2025">2025</option>
+        <option value="2026">2026</option>
+      </select>
+      <label>Полиса:</label>
+      <input type="text" id="filterPolisa" placeholder="пр. 19/001104" style="width:115px;">
+      <button class="btn-load" id="btnApplyFilter">Вчитај</button>
+    </div>
+
+    <div class="ml-layout">
+      <aside class="ml-slicer">
+        <div class="slicer-title">Период</div>
+        <span class="slicer-chip hi" id="chipMonth">Месец: —</span>
+        <span class="slicer-chip hi" id="chipYear">Година: —</span>
+        <div class="slicer-title" style="margin-top:.5rem;">Филтри</div>
+        <span class="slicer-chip" id="chipPolicy">Полиса: —</span>
+        <span class="slicer-chip" id="chipAgent">Агент: —</span>
+        <div class="slicer-title" style="margin-top:.5rem;">Резиме</div>
+        <span class="slicer-chip" id="sумПолиси">Полиси: —</span>
+        <span class="slicer-chip" id="сумАгенти">Агенти: —</span>
+        <span class="slicer-chip" id="сумНаплата">Наплата: —</span>
+        <span class="slicer-chip" id="сумПровизија">Провизија: —</span>
+      </aside>
+
+      <main class="ml-main">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Полиси</div>
+            <div class="kpi-value" id="mlKpiPolicies">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Наплата (МКД)</div>
+            <div class="kpi-value" id="mlKpiPremium">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Провизија (МКД)</div>
+            <div class="kpi-value" id="mlKpiCommission">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Просек наплата</div>
+            <div class="kpi-value" id="mlKpiAvg">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Активни агенти</div>
+            <div class="kpi-value" id="mlKpiAgents">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Фактури</div>
+            <div class="kpi-value" id="mlKpiInvoices">—</div>
+          </div>
+        </div>
+
+        <div class="dashboard-tabs">
+          <button class="dashboard-tab is-active" data-tab="overview">Преглед</button>
+          <button class="dashboard-tab" data-tab="agents">Агенти</button>
+          <button class="dashboard-tab" data-tab="commission">По тип провизија</button>
+          <button class="dashboard-tab" data-tab="trends">Месечен тренд</button>
+          <button class="dashboard-tab" data-tab="nepresmetani">Контрола на фактури <span id="nepresmetaniBadge"></span></button>
+        </div>
+
+        <!-- TAB 1: Преглед -->
+        <div class="dashboard-view is-active" id="tab-overview">
+          <div class="dash-grid-2">
+            <div class="dash-box">
+              <h3>Провизија по тип</h3>
+              <svg class="chart-svg" id="svgCommType" height="210"></svg>
+            </div>
+            <div class="dash-box">
+              <h3>Топ 10 агенти по провизија</h3>
+              <div id="tblTopAgents"></div>
+            </div>
+          </div>
+          <div style="margin-top:.7rem;">
+            <div class="dash-box">
+              <h3 class="teal">Бодови по тип</h3>
+              <svg class="chart-svg" id="svgPointsType" height="150"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Агенти -->
+        <div class="dashboard-view" id="tab-agents">
+          <div class="dash-grid-3">
+            <div class="dash-box">
+              <h3>Сите агенти — провизија и бодови</h3>
+              <div id="tblAllAgents"></div>
+            </div>
+            <div class="dash-box">
+              <h3 class="teal">Топ 10 — хоризонтален преглед</h3>
+              <svg class="chart-svg" id="svgAgentsHBar" height="280"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: По тип провизија -->
+        <div class="dashboard-view" id="tab-commission">
+          <div class="dash-grid-2">
+            <div class="dash-box">
+              <h3>Провизија по тип — детал</h3>
+              <div id="tblCommType"></div>
+            </div>
+            <div class="dash-box">
+              <h3 class="purple">Графикон — провизија по тип</h3>
+              <svg class="chart-svg" id="svgCommTypeDetail" height="220"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: Месечен тренд -->
+        <div class="dashboard-view" id="tab-trends">
+          <div class="dash-box" style="margin-bottom:.7rem;">
+            <h3 class="orange">Месечен тренд — провизија (МКД)</h3>
+            <svg class="chart-svg" id="svgMonthlyLine" height="210"></svg>
+          </div>
+          <div class="dash-box">
+            <h3>Месечна табела</h3>
+            <div id="tblMonthly"></div>
+          </div>
+        </div>
+
+        <!-- TAB 5: Контрола на фактури без пресметка -->
+        <div class="dashboard-view" id="tab-nepresmetani">
+          <div class="dash-box">
+            <h3 class="orange">Фактури без пресметана провизија — статус на наплата за избраниот период</h3>
+            <p style="font-size:.78rem;color:#607080;margin:0 0 .5rem;">
+              Секој ред се однесува на конкретна фактура, не на целата полиса. Коментарот покажува дали фактурата била целосно наплатена до крајот на избраниот месец. Кликни „Зошто?“ за дијагноза од базата.
+            </p>
+            <div id="tblNepresmetani"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div class="status-bar loading" id="dashboardStatus">Се вчитува dashboard...</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtN = v => new Intl.NumberFormat('mk-MK', {maximumFractionDigits:0}).format(Number(v||0));
+const fmtM = v => new Intl.NumberFormat('mk-MK', {minimumFractionDigits:0,maximumFractionDigits:0}).format(Number(v||0));
+const fmtP = (v, tot) => tot ? (Number(v||0)/tot*100).toFixed(1)+'%' : '—';
+
+const MONTHS = ['','Јануари','Февруари','Март','Април','Мај','Јуни','Јули','Август','Септември','Октомври','Ноември','Декември'];
+const COLORS = ['#1f6fb2','#1a7a6e','#5b2d8b','#b85a00','#2d6b35','#8b1a5b','#4a7aab','#7a5a1a'];
+
+// ── Tab switching ──────────────────────────────────────────
+document.querySelectorAll('.dashboard-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dashboard-tab').forEach(b => b.classList.remove('is-active'));
+    document.querySelectorAll('.dashboard-view').forEach(v => v.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    $(`tab-${btn.dataset.tab}`).classList.add('is-active');
+  });
+});
+
+// ── Sortable table ─────────────────────────────────────────
+function makeSortable(tableEl) {
+  const ths = tableEl.querySelectorAll('th[data-sort]');
+  ths.forEach(th => {
+    th.addEventListener('click', () => {
+      const col = parseInt(th.dataset.sort);
+      const isNum = th.dataset.type === 'num';
+      const tbody = tableEl.querySelector('tbody');
+      const rows = Array.from(tbody.rows);
+      const asc = th.classList.contains('sort-asc');
+      ths.forEach(t => t.classList.remove('sort-asc','sort-desc'));
+      th.classList.add(asc ? 'sort-desc' : 'sort-asc');
+      rows.sort((a, b) => {
+        let av = a.cells[col]?.dataset.val ?? a.cells[col]?.textContent ?? '';
+        let bv = b.cells[col]?.dataset.val ?? b.cells[col]?.textContent ?? '';
+        if (isNum) { av = parseFloat(av)||0; bv = parseFloat(bv)||0; return asc ? bv-av : av-bv; }
+        return asc ? bv.localeCompare(av,'mk') : av.localeCompare(bv,'mk');
+      });
+      rows.forEach((r, i) => { tbody.appendChild(r); r.cells[0].textContent = i+1; });
+    });
+  });
+}
+
+// ── Bar chart (vertical) ───────────────────────────────────
+function renderBarChart(svgId, rows, labelKey, valueKey, colorFn) {
+  const svg = $(svgId);
+  if (!svg) return;
+  const W = svg.clientWidth || 560, H = parseInt(svg.getAttribute('height')) || 210;
+  const pad = {l:10, r:10, t:20, b:42};
+  const data = (rows||[]).slice(0,10);
+  if (!data.length) { svg.innerHTML = `<text x="20" y="36" font-size="13" fill="#888">Нема податоци</text>`; return; }
+  const max = Math.max(...data.map(r=>Number(r[valueKey]||0)),1);
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const bw = (innerW / data.length) * 0.6;
+  const gap = (innerW / data.length);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  let html = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="#cdd7e0" stroke-width="1"/>`;
+  [0,.25,.5,.75,1].forEach(p => {
+    const gy = pad.t + innerH * (1-p);
+    html += `<line x1="${pad.l}" y1="${gy}" x2="${W-pad.r}" y2="${gy}" stroke="#eef2f6" stroke-width="1"/>`;
+  });
+  data.forEach((r, i) => {
+    const x = pad.l + i*gap + gap*.2;
+    const val = Number(r[valueKey]||0);
+    const h = Math.max((val/max)*innerH, 2);
+    const y = pad.t + innerH - h;
+    const color = colorFn ? colorFn(i, r) : COLORS[i%COLORS.length];
+    const lbl = String(r[labelKey]||'').slice(0,10);
+    html += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"/>`;
+    html += `<text x="${(x+bw/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle" font-size="9" fill="#203040">${fmtN(val)}</text>`;
+    html += `<text x="${(x+bw/2).toFixed(1)}" y="${(H-pad.b+13).toFixed(1)}" text-anchor="middle" font-size="9" fill="#607080">${lbl}</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+// ── Horizontal bar chart ───────────────────────────────────
+function renderHBarChart(svgId, rows, labelKey, valueKey) {
+  const svg = $(svgId);
+  if (!svg) return;
+  const W = svg.clientWidth || 320, H = parseInt(svg.getAttribute('height')) || 280;
+  const data = (rows||[]).slice(0,10);
+  if (!data.length) { svg.innerHTML = `<text x="10" y="30" font-size="12" fill="#888">Нема податоци</text>`; return; }
+  const max = Math.max(...data.map(r=>Number(r[valueKey]||0)),1);
+  const rowH = Math.floor((H-10) / data.length);
+  const lblW = 100, barArea = W - lblW - 55, padT = 5;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  let html = '';
+  data.forEach((r, i) => {
+    const val = Number(r[valueKey]||0);
+    const bw = Math.max((val/max)*barArea, 2);
+    const y = padT + i*rowH;
+    const color = COLORS[i%COLORS.length];
+    const lbl = String(r[labelKey]||'').slice(0,16);
+    html += `<text x="${lblW-5}" y="${y+rowH*.65}" text-anchor="end" font-size="9.5" fill="#304050">${lbl}</text>`;
+    html += `<rect x="${lblW}" y="${y+3}" width="${bw.toFixed(1)}" height="${rowH-6}" rx="3" fill="${color}"/>`;
+    html += `<text x="${(lblW+bw+4).toFixed(1)}" y="${y+rowH*.65}" font-size="9" fill="#203040">${fmtN(val)}</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+// ── Line chart ─────────────────────────────────────────────
+function renderLineChart(svgId, rows, labelKey, valueKey) {
+  const svg = $(svgId);
+  if (!svg) return;
+  const W = svg.clientWidth || 640, H = parseInt(svg.getAttribute('height')) || 210;
+  const pad = {l:14, r:14, t:18, b:32};
+  const data = rows||[];
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!data.length) { svg.innerHTML = `<text x="20" y="36" font-size="13" fill="#888">Нема податоци</text>`; return; }
+  const max = Math.max(...data.map(r=>Number(r[valueKey]||0)),1);
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const pts = data.map((r, i) => ({
+    x: pad.l + (data.length===1 ? innerW/2 : i*(innerW/(data.length-1))),
+    y: pad.t + innerH - (Number(r[valueKey]||0)/max)*innerH,
+    label: String(r[labelKey]||''), val: Number(r[valueKey]||0)
+  }));
+  let html = '';
+  [0,.25,.5,.75,1].forEach(p => {
+    const gy = pad.t + innerH*(1-p);
+    html += `<line x1="${pad.l}" y1="${gy}" x2="${W-pad.r}" y2="${gy}" stroke="#eef2f6" stroke-width="1"/>`;
+    html += `<text x="${pad.l-2}" y="${gy+3}" text-anchor="end" font-size="8.5" fill="#aaa">${fmtN(max*p)}</text>`;
+  });
+  const fillPts = [...pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`), `${pts[pts.length-1].x.toFixed(1)},${(pad.t+innerH).toFixed(1)}`, `${pts[0].x.toFixed(1)},${(pad.t+innerH).toFixed(1)}`].join(' ');
+  html += `<polygon points="${fillPts}" fill="#1f6fb2" opacity="0.12"/>`;
+  html += `<polyline points="${pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="#1f6fb2" stroke-width="2.5"/>`;
+  pts.forEach(p => {
+    html += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#1f6fb2"/>`;
+    html += `<text x="${p.x.toFixed(1)}" y="${(p.y-7).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#1f6fb2">${fmtN(p.val)}</text>`;
+    html += `<text x="${p.x.toFixed(1)}" y="${(pad.t+innerH+12).toFixed(1)}" text-anchor="middle" font-size="9" fill="#607080">${p.label.slice(0,6)}</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+// ── Render functions ───────────────────────────────────────
+function renderTopAgentsTable(rows) {
+  const el = $('tblTopAgents');
+  if (!rows||!rows.length) { el.innerHTML='<p style="color:#888;font-size:.82rem;">Нема агенти.</p>'; return; }
+  const totComm = rows.reduce((s,r)=>s+r.commission,0);
+  let html = `<table class="dash-table"><thead><tr>
+    <th>#</th>
+    <th data-sort="1">Агент</th>
+    <th data-sort="2" data-type="num">Полиси</th>
+    <th data-sort="3" data-type="num">Провизија</th>
+    <th data-sort="3" data-type="num">%</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r,i) => {
+    const pct = totComm ? (r.commission/totComm*100).toFixed(1) : '0.0';
+    html += `<tr>
+      <td class="rank">${i+1}</td>
+      <td>${r.agent_name||'—'}</td>
+      <td class="num" data-val="${r.policies}">${fmtN(r.policies)}</td>
+      <td class="num" data-val="${r.commission}">${fmtM(r.commission)}</td>
+      <td class="num">${pct}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  makeSortable(el.querySelector('table'));
+}
+
+function renderAllAgentsTable(rows) {
+  const el = $('tblAllAgents');
+  if (!rows||!rows.length) { el.innerHTML='<p style="color:#888;font-size:.82rem;">Нема агенти.</p>'; return; }
+  const totComm = rows.reduce((s,r)=>s+r.commission,0);
+  const maxComm = rows[0]?.commission||1;
+  let html = `<div style="overflow-y:auto;max-height:320px;"><table class="dash-table"><thead><tr>
+    <th>#</th>
+    <th data-sort="1">Агент</th>
+    <th data-sort="2" data-type="num">Полиси</th>
+    <th data-sort="3" data-type="num">Провизија (МКД)</th>
+    <th data-sort="4" data-type="num">Бодови</th>
+    <th>%</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r,i) => {
+    const pct = totComm ? (r.commission/totComm*100).toFixed(1) : '0.0';
+    const barW = Math.max((r.commission/maxComm)*60, 1).toFixed(0);
+    html += `<tr>
+      <td class="rank">${i+1}</td>
+      <td>${r.agent_name||'—'}</td>
+      <td class="num" data-val="${r.policies}">${fmtN(r.policies)}</td>
+      <td class="num" data-val="${r.commission}">
+        <span class="bar-mini" style="width:${barW}px;background:${COLORS[i%COLORS.length]};"></span>
+        ${fmtM(r.commission)}
+      </td>
+      <td class="num" data-val="${r.points}">${fmtN(r.points)}</td>
+      <td class="num">${pct}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+  makeSortable(el.querySelector('table'));
+}
+
+function renderCommTypeTable(rows) {
+  const el = $('tblCommType');
+  if (!rows||!rows.length) { el.innerHTML='<p style="color:#888;font-size:.82rem;">Нема податоци.</p>'; return; }
+  const totComm = rows.reduce((s,r)=>s+r.commission,0);
+  const totPts  = rows.reduce((s,r)=>s+r.points,0);
+  let html = `<table class="dash-table"><thead><tr>
+    <th data-sort="0">Тип провизија</th>
+    <th data-sort="1" data-type="num">Полиси</th>
+    <th data-sort="2" data-type="num">Провизија (МКД)</th>
+    <th data-sort="2" data-type="num">% провизија</th>
+    <th data-sort="3" data-type="num">Бодови</th>
+    <th data-sort="3" data-type="num">% бодови</th>
+  </tr></thead><tbody>`;
+  rows.forEach(r => {
+    const pctC = totComm ? (r.commission/totComm*100).toFixed(1) : '0.0';
+    const pctP = totPts  ? (r.points/totPts*100).toFixed(1) : '0.0';
+    html += `<tr>
+      <td><b>${r.type||'—'}</b></td>
+      <td class="num" data-val="${r.policies}">${fmtN(r.policies)}</td>
+      <td class="num" data-val="${r.commission}">${fmtM(r.commission)}</td>
+      <td class="num">${pctC}%</td>
+      <td class="num" data-val="${r.points}">${fmtN(r.points)}</td>
+      <td class="num">${pctP}%</td>
+    </tr>`;
+  });
+  html += `<tr style="background:#f0f5fa;font-weight:900;">
+    <td>ВКУПНО</td>
+    <td class="num">${fmtN(rows.reduce((s,r)=>s+r.policies,0))}</td>
+    <td class="num">${fmtM(totComm)}</td>
+    <td class="num">100%</td>
+    <td class="num">${fmtN(totPts)}</td>
+    <td class="num">100%</td>
+  </tr>`;
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  makeSortable(el.querySelector('table'));
+}
+
+function renderMonthlyTable(rows) {
+  const el = $('tblMonthly');
+  if (!rows||!rows.length) { el.innerHTML='<p style="color:#888;font-size:.82rem;">Нема податоци.</p>'; return; }
+  let html = `<table class="dash-table"><thead><tr>
+    <th>Месец</th>
+    <th data-sort="1" data-type="num">Полиси</th>
+    <th data-sort="2" data-type="num">Провизија (МКД)</th>
+    <th data-sort="3" data-type="num">Бодови</th>
+  </tr></thead><tbody>`;
+  rows.forEach(r => {
+    html += `<tr>
+      <td><b>${r.month||'—'}</b></td>
+      <td class="num" data-val="${r.policies}">${fmtN(r.policies)}</td>
+      <td class="num" data-val="${r.commission}">${fmtM(r.commission)}</td>
+      <td class="num" data-val="${r.points}">${fmtN(r.points)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  makeSortable(el.querySelector('table'));
+}
+
+// ── Непресметани полиси ────────────────────────────────────
+function renderNepresmetaniTable(rows, body) {
+  const el = $('tblNepresmetani');
+  const badge = $('nepresmetaniBadge');
+  if (!rows || !rows.length) {
+    badge.textContent = '';
+    el.innerHTML = '<p style="color:#1a6a1a;font-size:.82rem;">✅ Нема наплатени фактури без пресметана провизија за избраниот период.</p>';
+    return;
+  }
+  const realErrorStatuses = new Set([
+    'NAPLATENA_NE_PRESMETANA',
+    'LC_BODOVI_NO_NEMA_PRESMETKA',
+    'PROMOTOR_BODOVI_NO_NEMA_PRESMETKA'
+  ]);
+  const warningStatuses = new Set(['RAZLIKA_NAPLATA']);
+  const realErrorCount = rows.filter(r => realErrorStatuses.has(r.status_sporedba || '')).length;
+  badge.textContent = realErrorCount ? `(${realErrorCount} грешки / ${rows.length})` : `(${rows.length})`;
+  let html = `<table class="dash-table"><thead><tr>
+    <th>#</th>
+    <th data-sort="1">Полиса</th>
+    <th data-sort="2">Фактура</th>
+    <th data-sort="3">Клиент</th>
+    <th data-sort="4">Агент</th>
+    <th data-sort="5" data-type="num">Наплата во месец</th>
+    <th data-sort="6" data-type="num">Наплата до крај на период</th>
+    <th data-sort="7" data-type="num">Износ на фактура</th>
+    <th>Статус</th>
+    <th>Коментар</th>
+    <th></th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const polisa = r.polisa_sporedba || r.polisa || '';
+    const faktura = r.faktura_sporedba || r.faktura || '';
+    // Za proviziskata kontrola koristi go agentot od ponudata/polisata.
+    const agentid = r.prov_agentid || r.agentid || '';
+    const agentNaziv = r.prov_agent_naziv || r.agent_naziv || '—';
+    const agentStatus = r.agent_status ? ` (${r.agent_status})` : '';
+    const status = r.status_sporedba || '';
+    const rowClass = realErrorStatuses.has(status)
+      ? 'control-error'
+      : (warningStatuses.has(status) ? 'control-warning' : 'control-info');
+    html += `<tr class="${rowClass}" data-polisa="${polisa}" data-agentid="${agentid}">
+      <td class="rank">${i+1}</td>
+      <td>${polisa || '—'}</td>
+      <td>${faktura || '—'}</td>
+      <td>${r.client_naziv || '—'}</td>
+      <td>${agentNaziv}${agentStatus}</td>
+      <td class="num" data-val="${r.vk_iznos_p||0}">${fmtM(r.vk_iznos_p)}</td>
+      <td class="num" data-val="${r.faktura_naplata_do_period||0}">${fmtM(r.faktura_naplata_do_period)}</td>
+      <td class="num" data-val="${r.faktura_iznos||0}">${fmtM(r.faktura_iznos)}</td>
+      <td style="font-size:.7rem;font-weight:600;">${r.status_sporedba || ''}</td>
+      <td style="font-size:.72rem;color:#607080;">${r.komentar || ''}</td>
+      <td><button type="button" class="btn-zosto" style="font-size:.72rem;padding:.2rem .5rem;border-radius:4px;border:1px solid #b85a00;background:#fff3e6;color:#b85a00;cursor:pointer;">Зошто?</button></td>
+    </tr>
+    <tr class="row-zosto is-hidden" style="display:none;"><td></td><td colspan="10"><div class="zosto-body" style="font-size:.75rem;white-space:pre-wrap;font-family:monospace;color:#223;padding:.3rem 0;"></div></td></tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  const table = el.querySelector('table');
+  makeSortable(table);
+  table.querySelectorAll('.btn-zosto').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr = btn.closest('tr');
+      const detailTr = tr.nextElementSibling;
+      const detailBody = detailTr.querySelector('.zosto-body');
+      const isHidden = detailTr.style.display === 'none';
+      if (!isHidden) { detailTr.style.display = 'none'; return; }
+      detailTr.style.display = '';
+      const polisa = tr.dataset.polisa, agentid = tr.dataset.agentid;
+      if (!polisa || !agentid || !body.month || !body.year) {
+        detailBody.textContent = 'Нема доволно податоци (полиса/агент/месец/година) за дијагноза.';
+        return;
+      }
+      detailBody.textContent = 'Вчитување...';
+      try {
+        const res = await fetch(`/siglife-report/api/zosto_ne_presmetana?polisa=${encodeURIComponent(polisa)}&mesec=${body.month}&godina=${body.year}&agentid=${agentid}`);
+        const d = await res.json();
+        detailBody.textContent = d.success ? d.text : ('Грешка: '+d.message);
+      } catch(e) {
+        detailBody.textContent = 'Грешка: '+e.message;
+      }
+    });
+  });
+}
+
+async function loadNepresmetani(body) {
+  const el = $('tblNepresmetani');
+  el.innerHTML = '<p style="color:#1b4d75;font-size:.82rem;">⏳ Се вчитуваат непресметани полиси...</p>';
+  try {
+    const resp = await fetch('/siglife-report/api/multilevel-nepresmetani-polisi', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      el.innerHTML = `<p style="color:#a00000;font-size:.82rem;">❌ ${data.message || data.detail || 'Грешка при вчитување.'}</p>`;
+      $('nepresmetaniBadge').textContent = '';
+      return;
+    }
+    renderNepresmetaniTable(data.rows, body);
+  } catch(e) {
+    el.innerHTML = `<p style="color:#a00000;font-size:.82rem;">❌ Мрежна грешка: ${e.message}</p>`;
+  }
+}
+
+// ── URL ↔ filter sync ──────────────────────────────────────
+function payloadFromUrl() {
+  const p = new URLSearchParams(window.location.search);
+  const b = {};
+  ['month','year','agent_id','region_id','team_id'].forEach(k => { if(p.get(k)) b[k]=parseInt(p.get(k)); });
+  if(p.get('polisa_broj')) b.polisa_broj=p.get('polisa_broj');
+  return b;
+}
+
+function syncFilters(body) {
+  if(body.month) $('filterMonth').value = body.month;
+  if(body.year)  $('filterYear').value  = body.year;
+  if(body.polisa_broj) $('filterPolisa').value = body.polisa_broj;
+}
+
+function buildPayload() {
+  const b = {};
+  const m = $('filterMonth').value, y = $('filterYear').value, p = $('filterPolisa').value.trim();
+  if(m) b.month = parseInt(m);
+  if(y) b.year  = parseInt(y);
+  if(p) b.polisa_broj = p;
+  return b;
+}
+
+function updateSidebar(body, data) {
+  const mn = body.month ? MONTHS[body.month]||body.month : '—';
+  const yr = body.year  || '—';
+  $('chipMonth').textContent    = `📅 ${mn}`;
+  $('chipYear').textContent     = `📅 ${yr}`;
+  $('chipPolicy').textContent   = `Полиса: ${body.polisa_broj||'—'}`;
+  $('chipAgent').textContent    = `Агент: ${body.agent_id||'—'}`;
+  if(data) {
+    $('sумПолиси').textContent   = `Полиси: ${fmtN(data.kpis.policies)}`;
+    $('сумАгенти').textContent   = `Агенти: ${fmtN(data.kpis.agents)}`;
+    $('сумНаплата').textContent  = `Наплата: ${fmtM(data.kpis.premium_collected)}`;
+    $('сумПровизија').textContent= `Провизија: ${fmtM(data.kpis.commission_paid)}`;
+  }
+}
+
+// ── Main load ──────────────────────────────────────────────
+let dashboardController = null;
+
+async function loadDashboard(body) {
+  if (dashboardController) dashboardController.abort();
+  const controller = new AbortController();
+  dashboardController = controller;
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  const loadBtn = $('btnApplyFilter');
+  loadBtn.disabled = true;
+  updateSidebar(body, null);
+  const status = $('dashboardStatus');
+  const mn = body.month ? MONTHS[body.month]||body.month : '—';
+  const yr = body.year||'—';
+  status.className = 'status-bar loading';
+  status.textContent = `⏳ Се вчитува... (${mn} ${yr})`;
+
+  let data;
+  try {
+    const resp = await fetch('/siglife-report/api/multilevel-dashboard', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+      signal:controller.signal
+    });
+    if (!resp.ok) {
+      let detail = '';
+      try { const j=await resp.json(); detail=j.detail||''; } catch { detail=await resp.text(); }
+      status.className = 'status-bar err';
+      if (resp.status===404)
+        status.textContent = `⚠️ Нема податоци за ${mn} ${yr}. Проверете дали провизиите се пресметани за тој период.`;
+      else
+        status.textContent = `❌ Грешка ${resp.status}: ${String(detail).slice(0,300)}`;
+      return;
+    }
+    data = await resp.json();
+  } catch(e) {
+    if (dashboardController !== controller) return;
+    status.className='status-bar err';
+    status.textContent = e.name === 'AbortError'
+      ? '⚠️ Вчитувањето беше прекинато или траеше повеќе од 2 минути. Обидете се со месец и година.'
+      : '❌ Мрежна грешка: '+e.message;
+    return;
+  } finally {
+    clearTimeout(timeoutId);
+    if (dashboardController === controller) loadBtn.disabled = false;
+  }
+
+  // KPIs
+  $('mlKpiPolicies').textContent  = fmtN(data.kpis.policies);
+  $('mlKpiPremium').textContent   = fmtM(data.kpis.premium_collected);
+  $('mlKpiCommission').textContent= fmtM(data.kpis.commission_paid);
+  $('mlKpiAvg').textContent       = fmtM(data.kpis.average_premium);
+  $('mlKpiAgents').textContent    = fmtN(data.kpis.agents);
+  $('mlKpiInvoices').textContent  = fmtN(data.kpis.naplata_fakturi);
+
+  updateSidebar(body, data);
+
+  // TAB 1: Overview
+  renderBarChart('svgCommType', data.commission_type, 'type', 'commission', (i)=>COLORS[i%COLORS.length]);
+  renderTopAgentsTable(data.top_agents);
+  renderBarChart('svgPointsType', data.commission_type, 'type', 'points', (i)=>COLORS[(i+3)%COLORS.length]);
+
+  // TAB 2: Агенти
+  renderAllAgentsTable(data.all_agents || data.top_agents);
+  renderHBarChart('svgAgentsHBar', data.top_agents, 'agent_name', 'commission');
+
+  // TAB 3: По тип
+  renderCommTypeTable(data.commission_type);
+  renderBarChart('svgCommTypeDetail', data.commission_type, 'type', 'commission', (i)=>COLORS[i%COLORS.length]);
+
+  // TAB 4: Тренд
+  renderLineChart('svgMonthlyLine', data.monthly, 'month', 'commission');
+  renderMonthlyTable(data.monthly);
+
+  status.className = 'status-bar ok';
+  status.textContent = `✅ Прикажани: ${fmtN(data.kpis.policies)} полиси | Провизија: ${fmtM(data.kpis.commission_paid)} МКД | Агенти: ${fmtN(data.kpis.agents)} (${mn} ${yr})`;
+
+  // TAB 5: Непресметани полиси (не го блокира главниот dashboard ако паѓа)
+  loadNepresmetani(body);
+}
+
+function runLoad() { loadDashboard(buildPayload()); }
+
+$('btnApplyFilter').addEventListener('click', runLoad);
+$('btnReloadDashboard').addEventListener('click', runLoad);
+
+// Boot
+const initialPayload = payloadFromUrl();
+const today = new Date();
+if (!initialPayload.month) initialPayload.month = today.getMonth() + 1;
+if (!initialPayload.year) initialPayload.year = today.getFullYear();
+syncFilters(initialPayload);
+loadDashboard(initialPayload);
+</script>
+{% endblock %}

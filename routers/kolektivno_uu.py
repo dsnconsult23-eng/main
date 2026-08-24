@@ -50,7 +50,6 @@ LEFT JOIN (
 ) fs ON fs.os_aneks_fakturaid = x0.os_aneks_fakturaid
 WHERE NVL(x0.f_rs, 'R') <> 'N'
   AND x1.os_zbiren_aneksid IS NULL
-  AND x2.status_polisa = 'K'
   AND NVL(x0.iznos, 0) > 0
   {extra_where}
 GROUP BY x2.polisa_broj_cel, pc.par_client, pc.desc
@@ -106,7 +105,6 @@ LEFT JOIN (
 ) fs ON fs.os_aneks_fakturaid = x0.os_aneks_fakturaid
 WHERE NVL(x0.f_rs, 'R') <> 'N'
   AND x1.os_zbiren_aneksid IS NULL
-  AND x2.status_polisa = 'K'
   {extra_where}
 GROUP BY x2.polisa_broj_cel, pc.par_client, pc.desc
 HAVING ABS(SUM(NVL(x0.iznos,0) - NVL(fs.naplata,0))) < 0.01
@@ -172,7 +170,6 @@ LEFT JOIN (
 ) fs ON fs.os_aneks_fakturaid = x0.os_aneks_fakturaid
 WHERE NVL(x0.f_rs, 'R') <> 'N'
   AND x1.os_zbiren_aneksid IS NULL
-  AND x2.status_polisa = 'K'
   AND ABS(NVL(x0.iznos, 0) - NVL(fs.naplata, 0)) > 0.005
   {extra_where}
 ORDER BY x2.polisa_broj_cel,
@@ -209,6 +206,26 @@ def _build_individual_sql(tip_polisa: str = "", klient: str = "",
 
     sql = _SQL_INDIVIDUAL_BASE.format(extra_where=" ".join(conditions))
     return sql, params
+
+
+def _split_valid_by_faktura(rows_for_polisa: list, selected_fids: set) -> tuple:
+    """Among the selected os_aneks_fakturaid for one policy, keep only those
+    whose faktura group (the subset actually selected, not necessarily the
+    whole group) nets to zero. Returns (valid_ids, invalid_fakturi)."""
+    from collections import defaultdict
+    by_faktura = defaultdict(list)
+    for r in rows_for_polisa:
+        if str(r['os_aneks_fakturaid']) in selected_fids:
+            by_faktura[r['faktura_broj']].append(r)
+
+    valid_ids = []
+    invalid_fakturi = []
+    for faktura, grp in by_faktura.items():
+        if abs(sum(r['iznos'] for r in grp)) < 0.01:
+            valid_ids.extend(str(r['os_aneks_fakturaid']) for r in grp)
+        else:
+            invalid_fakturi.append(faktura)
+    return valid_ids, invalid_fakturi
 
 
 def _group_by_faktura(rows: list) -> list:
@@ -653,7 +670,35 @@ async def kolektivno_uu_zatvorit_selected(
 
     results = []
     for polisa, ids in polisa_ids.items():
-        code, msg, hid = _call_uu(ids, datum, user_id)
+        # Faktura-level balance check: reject any selected faktura group
+        # whose picked rows don't net to zero, instead of silently
+        # forwarding an unbalanced subset to fin_uu_kolektivno.
+        try:
+            sql_p, params_p = _build_individual_sql(polisa_broj=polisa)
+            raw_p = _query(sql_p, params_p)
+            rows_p = [
+                {"os_aneks_fakturaid": r[0], "faktura_broj": r[4], "iznos": float(r[6] or 0)}
+                for r in raw_p
+            ]
+        except Exception:
+            rows_p = []
+
+        valid_ids, invalid_fakturi = _split_valid_by_faktura(rows_p, set(ids))
+
+        if invalid_fakturi:
+            results.append({
+                "polisa":     polisa,
+                "code":       -1,
+                "msg":        "Избраните ставки за фактура(и) " + ", ".join(invalid_fakturi)
+                              + " не се балансирани на нула и не се затворени.",
+                "uu_broj":    None,
+                "knizi_msg":  None,
+                "knizi_warn": None,
+            })
+        if not valid_ids:
+            continue
+
+        code, msg, hid = _call_uu(valid_ids, datum, user_id)
         entry = {
             "polisa":      polisa,
             "code":        code,

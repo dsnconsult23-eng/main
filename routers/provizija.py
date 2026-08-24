@@ -10,7 +10,8 @@ import shutil
 import tempfile
 import uuid
 import json
-from typing import Optional
+from typing import List, Optional
+import math
 from db_ifx import informix_cursor
 
 import InkasoProvizijaBroker
@@ -81,6 +82,35 @@ async def multilevel_dashboard_page(request: Request):
 # -------------------------------
 prov_jobs = {}
 multilevel_jobs = {}
+pdf_jobs = {}
+
+
+def _pdf_job_status_path(job_id: str) -> str:
+    return os.path.join(tempfile.gettempdir(), f"pdf_job_{job_id}.json")
+
+
+def _write_pdf_job(job_id: str, data: dict):
+    current = pdf_jobs.get(job_id, {}).copy()
+    current.update(data)
+    pdf_jobs[job_id] = current
+    with open(_pdf_job_status_path(job_id), "w", encoding="utf-8") as f:
+        json.dump(current, f)
+
+
+def _read_pdf_job(job_id: str) -> Optional[dict]:
+    job = pdf_jobs.get(job_id)
+    if job:
+        return job
+    status_path = _pdf_job_status_path(job_id)
+    if not os.path.exists(status_path):
+        return None
+    try:
+        with open(status_path, "r", encoding="utf-8") as f:
+            job = json.load(f)
+        pdf_jobs[job_id] = job
+        return job
+    except Exception:
+        return None
 
 
 def _multilevel_job_status_path(job_id: str) -> str:
@@ -314,12 +344,13 @@ async def get_brokers():
 
 BASE_PATH = "/opt/siglife-reporting/Pregledi"
 
-def run_pdf_job(month: str, year: int,
+def run_pdf_job(job_id: str, month: str, year: int,
                 team_id: Optional[int],
                 region_id: Optional[int],
                 agent_id: Optional[int]):
     """Heavy PDF generation in the background."""
     try:
+        _write_pdf_job(job_id, {"status": "running", "message": "Генерирањето е во тек..."})
         ok, rez = GenerirajPdf(
             mesec=month,
             godina=year,
@@ -328,10 +359,14 @@ def run_pdf_job(month: str, year: int,
             par_agentid=agent_id,
             result_label=None
         )
-        if not ok:
+        if ok:
+            _write_pdf_job(job_id, {"status": "ready", "message": f"Генерирањето заврши. {rez or ''}".strip()})
+        else:
             print(f"PDF generation failed: {rez}")
+            _write_pdf_job(job_id, {"status": "error", "message": str(rez) or "Генерирањето не успеа."})
     except Exception as e:
         print(f"PDF generation exception: {e}")
+        _write_pdf_job(job_id, {"status": "error", "message": str(e)})
 
 @router.post("/api/generate_pdf")
 async def generate_pdf(payload: dict, background_tasks: BackgroundTasks):
@@ -372,7 +407,10 @@ async def generate_pdf(payload: dict, background_tasks: BackgroundTasks):
                             detail=f"Не може да се креира {target_folder}: {e}")
 
     # ---- Queue background job ----
+    job_id = uuid.uuid4().hex
+    _write_pdf_job(job_id, {"status": "running", "message": "Генерирањето започна во позадина..."})
     background_tasks.add_task(run_pdf_job,
+                              job_id,
                               month, year,
                               payload.get("team_id"),
                               payload.get("region_id"),
@@ -380,11 +418,20 @@ async def generate_pdf(payload: dict, background_tasks: BackgroundTasks):
 
     return {
         "success": True,
+        "job_id": job_id,
         "message": (
             f"Папката {target_folder} е избришана и креирана одново. "
             f"Генерирањето на PDF за {month}/{year} започна во позадина."
         ),
     }
+
+
+@router.get("/api/generate_pdf/status/{job_id}")
+async def generate_pdf_status(job_id: str):
+    job = _read_pdf_job(job_id)
+    if job is None:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "Job not found"})
+    return job
 
 # ---------- Download ZIP of all PDFs ----------
 @router.get("/download_all_pdfs/")
@@ -625,6 +672,390 @@ class MultilevelPreglediRequest(BaseModel):
     team_id: Optional[int] = Field(None, gt=0, description="Team ID")
 
 
+class CommissionRecordUpdate(BaseModel):
+    iznos_provizija: float = Field(..., ge=-999999999.99, le=999999999.99)
+
+
+class CommissionRecordRef(BaseModel):
+    source: str
+    record_id: int = Field(..., gt=0)
+
+
+class CommissionBulkUpdate(BaseModel):
+    records: List[CommissionRecordRef] = Field(..., min_length=1, max_length=1000)
+    iznos_provizija: float = Field(..., ge=-999999999.99, le=999999999.99)
+
+
+class CommissionBulkDelete(BaseModel):
+    records: List[CommissionRecordRef] = Field(..., min_length=1, max_length=1000)
+
+
+_COMMISSION_TABLES = {
+    "agent": ("lc_provizija_agent_presmetka", "lc_provizija_agent_presmetkaid"),
+    "promoter": ("provizija_promotori_presmetka", "provizija_promotori_presmetkaid"),
+}
+
+
+def _require_commission_access(request: Request):
+    user = request.session.get("user", {})
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403, detail="Немате пристап за промена на провизија.")
+
+
+def _commission_table(source: str):
+    table = _COMMISSION_TABLES.get(source)
+    if not table:
+        raise HTTPException(status_code=400, detail="Невалиден извор на провизија.")
+    return table
+
+
+@router.get("/api/commission-records")
+async def commission_records(
+    request: Request,
+    polisa_broj: Optional[str] = Query(None, max_length=50),
+    agent_id: Optional[int] = Query(None, gt=0),
+    faktura: Optional[str] = Query(None, max_length=50),
+    godina: Optional[int] = Query(None, ge=0, le=100),
+    rata: Optional[int] = Query(None, ge=0, le=1000),
+):
+    """Return editable commission rows for the selected policy and/or agent."""
+    _require_commission_access(request)
+    polisa_broj = (polisa_broj or "").strip()
+    faktura = (faktura or "").strip()
+    if not polisa_broj and not agent_id and not faktura and godina is None and rata is None:
+        raise HTTPException(status_code=422, detail="Внесете барем еден критериум за пребарување.")
+
+    filters = []
+    params = []
+    if polisa_broj:
+        filters.append("TRIM(pol.polisa_broj_cel) LIKE ?")
+        params.append(f"{polisa_broj}%")
+    if agent_id:
+        filters.append("pa.par_agentid = ?")
+        params.append(agent_id)
+    if faktura:
+        filters.append("TRIM(an.os_aneks || '/' || vesna.vrati_godina(an.par_yearid) || '-' || af.rata) LIKE ?")
+        params.append(f"{faktura}%")
+    if godina is not None:
+        filters.append("cp.koja_godina = ?")
+        params.append(godina)
+    if rata is not None:
+        filters.append("cp.rata = ?")
+        params.append(rata)
+    where_sql = " AND ".join(filters)
+
+    selects = []
+    for source, (table, pk) in _COMMISSION_TABLES.items():
+        points_table = (
+            "lc_provizija_agent_bodovi"
+            if source == "agent"
+            else "provizija_promotori_bodovi"
+        )
+        points_extra = (
+            f"""NVL((SELECT CASE WHEN NVL(SUM(b.br_bodovi), 0) = 0 THEN 0
+                                  ELSE SUM(b.iznos_bod) / SUM(b.br_bodovi) END
+                          FROM {points_table} b
+                         WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                           AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS osnovica_bod, """
+            "CAST(NULL AS DECIMAL(18,4)) AS duplirani_bodovi, "
+            "CAST(NULL AS DECIMAL(18,4)) AS storno_bodovi"
+            if source == "agent"
+            else f"""
+                NVL((SELECT MAX(b.bod) FROM {points_table} b
+                     WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                       AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS osnovica_bod,
+                NVL((SELECT SUM(b.duplirani_bodovi) FROM {points_table} b
+                     WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                       AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS duplirani_bodovi,
+                NVL((SELECT SUM(b.storno_bodovi) FROM {points_table} b
+                     WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                       AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS storno_bodovi
+            """
+        )
+        selects.append(f"""
+            SELECT
+                '{source}' AS source,
+                cp.{pk} AS record_id,
+                TRIM(pol.polisa_broj_cel) AS polisa_broj,
+                TRIM(an.os_aneks || '/' || vesna.vrati_godina(an.par_yearid) || '-' || af.rata) AS faktura,
+                cp.koja_godina AS godina,
+                cp.rata,
+                cp.dat_naplata,
+                cp.naplata AS iznos_naplata,
+                cp.iznos_provizija,
+                TRIM(vesna.vrati_tip_knizi(af.par_tip_kniziid)) AS tip_knizenje,
+                pa.par_agentid AS agent_id,
+                TRIM(vesna.vrati_agent_name(pa.par_agentid)) AS agent_name,
+                (SELECT COUNT(*) FROM {points_table} b
+                 WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                   AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec) AS broj_bodovni_zapisi,
+                NVL((SELECT SUM(b.br_bodovi) FROM {points_table} b
+                     WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                       AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS br_bodovi,
+                NVL((SELECT SUM(b.iznos_bod) FROM {points_table} b
+                     WHERE b.os_polisaid = pol.os_polisaid AND b.par_agentid = pa.par_agentid
+                       AND b.par_yearid = cp.par_yearid AND b.mesec = cp.mesec), 0) AS iznos_bod,
+                {points_extra}
+            FROM {table} cp
+            JOIN provizija_agent pa ON pa.par_provizija_agentid = cp.provizija_agentid
+            JOIN os_aneks_faktura af ON af.os_aneks_fakturaid = cp.os_aneks_fakturaid
+            JOIN os_aneks an ON an.os_aneksid = af.os_aneksid
+            JOIN os_polisa pol ON pol.os_polisaid = an.os_polisaid
+            WHERE {where_sql}
+        """)
+
+    # Do not sort the full commission/points result in Informix. The correlated
+    # point summaries make that exceed the reverse-proxy timeout for agent rows;
+    # the modal sorts the capped result in the browser instead.
+    sql = "SELECT FIRST 1000 * FROM (" + " UNION ALL ".join(selects) + ") commission_rows"
+    query_params = tuple(params + params)
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise HTTPException(status_code=503, detail="Нема конекција со базата.")
+    try:
+        cursor.execute(sql, query_params)
+        columns = [str(c[0]).lower() for c in cursor.description]
+        rows = []
+        for db_row in cursor.fetchall():
+            row = dict(zip(columns, db_row))
+            row["source"] = str(row.get("source") or "").strip()
+            row["record_id"] = int(row["record_id"])
+            row["iznos_provizija"] = float(row["iznos_provizija"] or 0)
+            row["iznos_naplata"] = float(row["iznos_naplata"] or 0)
+            for numeric_key in (
+                "br_bodovi", "iznos_bod", "osnovica_bod",
+                "duplirani_bodovi", "storno_bodovi",
+            ):
+                if row.get(numeric_key) is not None:
+                    row[numeric_key] = float(row[numeric_key])
+            rows.append(row)
+        rows.sort(key=lambda row: (
+            str(row.get("polisa_broj") or ""),
+            int(row.get("godina") or 0),
+            int(row.get("rata") or 0),
+            str(row.get("source") or ""),
+            int(row.get("record_id") or 0),
+        ))
+        return {
+            "success": True,
+            "rows": rows,
+            "count": len(rows),
+            "total_commission": round(sum(row["iznos_provizija"] for row in rows), 2),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Грешка при вчитување: {exc}")
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
+@router.get("/api/commission-records-export")
+async def export_commission_records(
+    request: Request,
+    polisa_broj: Optional[str] = Query(None, max_length=50),
+    agent_id: Optional[int] = Query(None, gt=0),
+    faktura: Optional[str] = Query(None, max_length=50),
+    godina: Optional[int] = Query(None, ge=0, le=100),
+    rata: Optional[int] = Query(None, ge=0, le=1000),
+):
+    """Export the same commission and point-calculation rows shown in the modal."""
+    data = await commission_records(request, polisa_broj, agent_id, faktura, godina, rata)
+    rows = data["rows"]
+    if not rows:
+        raise HTTPException(status_code=404, detail="Нема записи за Excel export.")
+
+    columns = {
+        "source": "Извор",
+        "record_id": "ID запис",
+        "agent_id": "ID агент",
+        "agent_name": "Агент",
+        "polisa_broj": "Број на полиса",
+        "faktura": "Фактура",
+        "godina": "Година",
+        "rata": "Рата",
+        "dat_naplata": "Датум на наплата",
+        "iznos_naplata": "Износ на наплата",
+        "iznos_provizija": "Износ на провизија",
+        "tip_knizenje": "Тип книжење",
+        "broj_bodovni_zapisi": "Број бодовни записи",
+        "br_bodovi": "Пресметани бодови",
+        "iznos_bod": "Износ од бодови",
+        "osnovica_bod": "Основица за бод",
+        "duplirani_bodovi": "Дуплирани бодови",
+        "storno_bodovi": "Сторно бодови",
+    }
+    frame = pd.DataFrame(rows).reindex(columns=list(columns)).rename(columns=columns)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        frame.to_excel(writer, index=False, sheet_name="Провизија и бодови")
+        sheet = writer.sheets["Провизија и бодови"]
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for cells in sheet.columns:
+            width = min(max(len(str(cell.value or "")) for cell in cells) + 2, 42)
+            sheet.column_dimensions[cells[0].column_letter].width = width
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=promena_provizija_bodovi.xlsx"},
+    )
+
+
+def _unique_commission_refs(records):
+    refs = []
+    seen = set()
+    for record in records:
+        record.source = record.source.strip()
+        _commission_table(record.source)
+        key = (record.source, record.record_id)
+        if key not in seen:
+            seen.add(key)
+            refs.append(record)
+    return refs
+
+
+def _begin_commission_transaction(conn):
+    """Disable JDBC autocommit so a bulk operation is atomic."""
+    jconn = getattr(conn, "jconn", None)
+    if jconn is not None:
+        jconn.setAutoCommit(False)
+
+
+def _safe_commission_rollback(conn):
+    """Do not let an Informix 'Not in transaction' error mask the real error."""
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+
+
+@router.put("/api/commission-records-bulk")
+async def update_commission_records_bulk(payload: CommissionBulkUpdate, request: Request):
+    _require_commission_access(request)
+    records = _unique_commission_refs(payload.records)
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise HTTPException(status_code=503, detail="Нема конекција со базата.")
+    try:
+        _begin_commission_transaction(conn)
+        changed = 0
+        for record in records:
+            table, pk = _commission_table(record.source)
+            cursor.execute(
+                f"UPDATE {table} SET iznos_provizija = ?, version = NVL(version, 0) + 1 WHERE {pk} = ?",
+                (payload.iznos_provizija, record.record_id),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Еден или повеќе записи не се пронајдени. Ништо не е променето.")
+            changed += 1
+        conn.commit()
+        return {"success": True, "count": changed, "message": f"Успешно се променети {changed} записи."}
+    except HTTPException:
+        _safe_commission_rollback(conn)
+        raise
+    except Exception as exc:
+        _safe_commission_rollback(conn)
+        raise HTTPException(status_code=500, detail=f"Групната промена не успеа: {exc}")
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
+@router.post("/api/commission-records-bulk-delete")
+async def delete_commission_records_bulk(payload: CommissionBulkDelete, request: Request):
+    _require_commission_access(request)
+    records = _unique_commission_refs(payload.records)
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise HTTPException(status_code=503, detail="Нема конекција со базата.")
+    try:
+        _begin_commission_transaction(conn)
+        changed = 0
+        for record in records:
+            table, pk = _commission_table(record.source)
+            cursor.execute(f"DELETE FROM {table} WHERE {pk} = ?", (record.record_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Еден или повеќе записи не се пронајдени. Ништо не е избришано.")
+            changed += 1
+        conn.commit()
+        return {"success": True, "count": changed, "message": f"Успешно се избришани {changed} записи."}
+    except HTTPException:
+        _safe_commission_rollback(conn)
+        raise
+    except Exception as exc:
+        _safe_commission_rollback(conn)
+        raise HTTPException(status_code=500, detail=f"Групното бришење не успеа: {exc}")
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
+@router.put("/api/commission-records/{source}/{record_id}")
+async def update_commission_record(
+    source: str, record_id: int, payload: CommissionRecordUpdate, request: Request
+):
+    _require_commission_access(request)
+    table, pk = _commission_table(source)
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise HTTPException(status_code=503, detail="Нема конекција со базата.")
+    try:
+        cursor.execute(
+            f"UPDATE {table} SET iznos_provizija = ?, version = NVL(version, 0) + 1 WHERE {pk} = ?",
+            (payload.iznos_provizija, record_id),
+        )
+        if cursor.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Записот не е пронајден.")
+        conn.commit()
+        return {"success": True, "message": "Провизијата е успешно променета."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Промената не успеа: {exc}")
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
+@router.delete("/api/commission-records/{source}/{record_id}")
+async def delete_commission_record(source: str, record_id: int, request: Request):
+    _require_commission_access(request)
+    table, pk = _commission_table(source)
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise HTTPException(status_code=503, detail="Нема конекција со базата.")
+    try:
+        cursor.execute(f"DELETE FROM {table} WHERE {pk} = ?", (record_id,))
+        if cursor.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Записот не е пронајден.")
+        conn.commit()
+        return {"success": True, "message": "Записот е успешно избришан."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Бришењето не успеа: {exc}")
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
 def _sql_text(value: str) -> str:
     return str(value).replace("'", "''").strip()
 
@@ -760,15 +1191,32 @@ def _fetch_report_naplata(
     region_id: Optional[int] = None,
     team_id: Optional[int] = None,
 ) -> pd.DataFrame:
+    if month is not None and year is not None:
+        period_end_sql = f"LAST_DAY(MDY({month}, 1, {year}))"
+    elif year is not None:
+        period_end_sql = f"MDY(12, 31, {year})"
+    else:
+        period_end_sql = "TODAY"
+
     where_clauses = [
-        "x5.par_tip_kniziid = x0.par_tip_kniziid",
         "x0.os_polisaid = x2.os_polisaid",
         "x2.os_ponudaid = x3.os_ponudaid",
-        "x6.fin_izvod_iid = x0.fin_izvod_iid",
+        "x7.os_aneks_fakturaid = x0.os_aneks_fakturaid",
+        "x8.os_aneksid = x7.os_aneksid",
         "x0.datum <= TODAY",
         "NVL(x0.f_rs, 'R') != 'N'",
         "x0.par_tip_dokumentid = 285",
         "x3.broker_par_client IS NULL",
+        "x0.iznos_p IS NOT NULL",
+        # par_tip_kniziid=286 nikogas ne se smeta kako naplata za presmetka na provizija.
+        "x0.par_tip_kniziid != 286",
+        # Naplata e validna samo za prvite 4 godini od polisata (za SITE par_tip_kniziid,
+        # ne samo 285): godina na fakturata - godina na skadenca_datum_od + 1 <= 4.
+        # os_polisa.datum_polisa NE se koristi bidejki edna polisa_broj_cel moze da ima
+        # poveke os_polisaid verzii niz vreme (zameni/kapitalizacii) so nepouzdan
+        # datum_polisa po verzija — x3.skadenca_datum_od (os_ponuda) e pobaraniot izvor.
+        # Godinata na fakturata se zema od x7.data_faktura (os_aneks_faktura).
+        "(YEAR(x7.data_faktura) - YEAR(x3.skadenca_datum_od) + 1) <= 4",
     ]
     if month is not None and year is not None:
         where_clauses.append(f"x0.datum >= MDY({month}, 1, {year})")
@@ -804,46 +1252,90 @@ def _fetch_report_naplata(
             )
         """)
 
-    sql = f"""
+    # vrati_naplata() e "tesok" UDF (isto kako vo kontrola_polisi.py) — mora da se
+    # presmeta TOCNO EDNAS po os_aneks_fakturaid, ne po fin_stavkaid red. Zatoa
+    # vnatresen subquery prvo agregira (GROUP BY, bez UDF) po fakturaid, a duri
+    # nadvoresniot join go presmetuva vrati_naplata()/go zema iznos-ot na fakturata
+    # eden pat po VEKE-agregiranata faktura.
+    inner_sql = f"""
         SELECT
-            x0.fin_stavkaid,
-            x0.datum,
-            CASE
-                WHEN x0.iznos_d != 0 THEN x0.dat_nalog
-                ELSE (
-                    SELECT x11.datum
-                    FROM "viki".fin_izvod_i x10, "viki".fin_izvod_h x11
-                    WHERE x11.fin_izvod_hid = x10.fin_izvod_hid
-                      AND x10.fin_izvod_iid = x0.fin_izvod_iid
-                )
-            END AS datum_knizi,
+            x0.os_aneks_fakturaid,
+            x0.os_polisaid,
             x2.polisa_broj_cel AS polisa,
             "vesna".vrati_faktura_broj(x0.os_aneks_fakturaid) AS faktura,
             "vesna".vrati_faktura_brojint(x0.os_aneks_fakturaid) AS fakturaint,
-            x0.os_aneks_fakturaid,
             x0.par_agent_id,
             "vesna".vrati_agent_name(x0.par_agent_id) AS agent_naziv,
-            x0.par_filijalaid,
-            "vesna".vrati_filijala_name(x0.par_filijalaid) AS filijala_naziv,
             x0.par_clientid,
             "vesna".vrati_client_id(x0.par_clientid) AS client_id,
             "vesna".vrati_client_name(x0.par_clientid) AS client_naziv,
-            "vesna".vrati_tip_knizi(x5.par_tip_kniziid) AS par_tip_knizi,
-            x0.iznos_d,
-            x0.iznos_d_den,
-            x0.iznos_p,
-            x0.iznos_p_den,
-            x6.desc AS opis,
-            "vesna".vrati_izvod_name_br(x0.fin_izvod_iid) AS izvod_name,
-            "vesna".vrati_izvod_broj(x0.fin_izvod_iid) AS broj_izvod,
-            "vesna".vrati_izvod_datum(x0.fin_izvod_iid) AS datum_izvod
+            SUM(x0.iznos_d)     AS iznos_d,
+            SUM(x0.iznos_d_den) AS iznos_d_den,
+            SUM(x0.iznos_p)     AS iznos_p,
+            SUM(x0.iznos_p_den) AS iznos_p_den
         FROM "viki".fin_stavka x0,
              "viki".os_polisa x2,
              "viki".os_ponuda x3,
-             "viki".par_tip_knizi x5,
-             "viki".fin_izvod_i x6
+             "viki".os_aneks_faktura x7,
+             "viki".os_aneks x8
     """
-    sql += " WHERE " + " AND ".join(where_clauses)
+    inner_sql += " WHERE " + " AND ".join(where_clauses)
+    inner_sql += " GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+
+    sql = f"""
+        SELECT
+            m.os_aneks_fakturaid, m.os_polisaid, m.polisa, m.faktura, m.fakturaint,
+            m.par_agent_id, m.agent_naziv, m.par_clientid, m.client_id, m.client_naziv,
+            m.iznos_d, m.iznos_d_den, m.iznos_p, m.iznos_p_den,
+            f9.iznos AS faktura_iznos,
+            NVL(vrati_naplata(m.os_aneks_fakturaid), 0) AS faktura_naplata_vkupno,
+            NVL((
+                SELECT SUM(NVL(fp.iznos_p, 0))
+                FROM "viki".fin_stavka fp
+                WHERE fp.os_aneks_fakturaid = m.os_aneks_fakturaid
+                  AND fp.par_tip_dokumentid = 285
+                  AND fp.iznos_p IS NOT NULL
+                  AND fp.datum <= {period_end_sql}
+            ), 0) AS faktura_naplata_do_period,
+            (SELECT COUNT(*) FROM lc_provizija_agent_bodovi lb
+             WHERE lb.os_polisaid=m.os_polisaid) AS lc_bodovi_count,
+            NVL((SELECT SUM(ABS(lb.iznos_bod)) FROM lc_provizija_agent_bodovi lb
+                 WHERE lb.os_polisaid=m.os_polisaid), 0) AS lc_iznos_bod,
+            (SELECT COUNT(*) FROM provizija_promotori_bodovi pb
+             WHERE pb.os_polisaid=m.os_polisaid) AS promoter_bodovi_count,
+            (SELECT COUNT(*) FROM lc_provizija_agent_presmetka lp
+             WHERE lp.os_aneks_fakturaid=m.os_aneks_fakturaid) AS lc_presmetki_count,
+            (SELECT COUNT(*) FROM provizija_promotori_presmetka pp
+             WHERE pp.os_aneks_fakturaid=m.os_aneks_fakturaid) AS promoter_presmetki_count
+            ,NVL((SELECT pa.par_status_aktiven
+                  FROM os_polisa px, os_ponuda ox, par_agent pa
+                  WHERE px.os_polisaid=m.os_polisaid
+                    AND ox.os_ponudaid=px.os_ponudaid
+                    AND pa.par_agentid=ox.par_agentid), 'A') AS agent_status
+            ,(SELECT ox.par_agentid
+              FROM os_polisa px, os_ponuda ox
+              WHERE px.os_polisaid=m.os_polisaid
+                AND ox.os_ponudaid=px.os_ponudaid) AS prov_agentid
+            ,(SELECT vrati_agent_name(ox.par_agentid)
+              FROM os_polisa px, os_ponuda ox
+              WHERE px.os_polisaid=m.os_polisaid
+                AND ox.os_ponudaid=px.os_ponudaid) AS prov_agent_naziv
+            ,(SELECT COUNT(*)
+              FROM os_polisa px, os_ponuda ox, provizija_agent pva,
+                   par_provizijadef pvd, par_provizijatip pvt
+              WHERE px.os_polisaid=m.os_polisaid
+                AND ox.os_ponudaid=px.os_ponudaid
+                AND pva.par_agentid=ox.par_agentid
+                AND pvd.par_provizijadefid=pva.par_provizijadefid
+                AND pvt.par_provizijatipid=pvd.par_provizijatipid
+                AND pvt.tip_provizija='P'
+                AND ((ox.datum_ponuda BETWEEN pva.pag_datumod AND pva.pag_datumdo)
+                     OR (ox.datum_ponuda>=pva.pag_datumod AND pva.pag_datumdo IS NULL))
+             ) AS prov_agent_config_count
+        FROM ({inner_sql}) m,
+             "viki".os_aneks_faktura f9
+        WHERE f9.os_aneks_fakturaid = m.os_aneks_fakturaid
+    """
 
     conn, cursor, ok = Connection.OSISinitConn()
     if not ok or conn is None:
@@ -1217,7 +1709,23 @@ def _write_sheet(writer, df: pd.DataFrame, sheet_name: str):
         max_len = max([len(str(col_name))] + [len(v) for v in values])
         worksheet.set_column(col_idx, col_idx, min(max(max_len + 2, 12), 42))
 
-    if sheet_name in ("Kontrola_Dupli", "Negativno_Saldo", "Sporedba_Fakturi", "Sporedba_Bodovi", "Nepresmetani_Fakturi") and len(df) > 0:
+    if sheet_name == "Nepresmetani_Fakturi" and len(df) > 0 and "status_sporedba" in df.columns:
+        # Vo Multilevel Excel kontrolata ne se site redovi greski. Crveno se
+        # samo statusite sto baraat korekcija; ocekuvanite delovni sostojbi
+        # (zatvoren agent, nema definicija, necelosna naplata, nula bodovi)
+        # ostanuvaat bez crvena pozadina.
+        from xlsxwriter.utility import xl_col_to_name
+        status_col = xl_col_to_name(df.columns.get_loc("status_sporedba"))
+        error_formula = (
+            f'=OR(${status_col}2="NAPLATENA_NE_PRESMETANA",'
+            f'${status_col}2="LC_BODOVI_NO_NEMA_PRESMETKA",'
+            f'${status_col}2="PROMOTOR_BODOVI_NO_NEMA_PRESMETKA")'
+        )
+        worksheet.conditional_format(
+            1, 0, len(df), max(len(df.columns) - 1, 0),
+            {"type": "formula", "criteria": error_formula, "format": alert_fmt}
+        )
+    elif sheet_name in ("Kontrola_Dupli", "Negativno_Saldo", "Sporedba_Fakturi", "Sporedba_Bodovi") and len(df) > 0:
         worksheet.conditional_format(
             1, 0, len(df), max(len(df.columns) - 1, 0),
             {"type": "no_errors", "format": alert_fmt}
@@ -1273,6 +1781,306 @@ def _build_grid_results(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _prep_sporedba_work(df: pd.DataFrame) -> pd.DataFrame:
+    """Minimalna podgotovka na prov_promotori_tp_ex redovi potrebna za
+    sporedba naplata vs presmetana provizija (vidi _compute_sporedba_fakturi)."""
+    work = df.copy()
+    work["_par_agentid"] = _series_text(work, "par_agentid")
+    work["_polisa_broj"] = _series_text(work, "polisa_broj")
+    work["_faktura"] = _series_text(work, "faktura")
+    work["_os_aneks_fakturaid"] = _series_text(work, "os_aneks_fakturaid")
+    work["_iznos_provizija"] = _series_num(work, "iznos_provizija")
+    work["_naplata"] = _series_num(work, "naplata")
+    work["_faktura_key"] = work["_faktura"].str.upper()
+    work["_sporedba_key"] = work["_os_aneks_fakturaid"].where(
+        work["_os_aneks_fakturaid"] != "",
+        work["_faktura_key"],
+    )
+    return work
+
+
+def _compute_sporedba_fakturi(work: pd.DataFrame, naplata_df: pd.DataFrame):
+    """
+    Sporeduva naplata (report_fakturi naplata za dadeniot mesec, _fetch_report_naplata)
+    so presmetana provizija (prov_promotori_tp_ex) po faktura/os_aneks_fakturaid.
+
+    `work` mora da ima kolonite _polisa_broj, _faktura, _os_aneks_fakturaid,
+    _sporedba_key, _par_agentid, _iznos_provizija, _naplata (vidi _prep_sporedba_work).
+
+    Vraca (naplata_zbiren, naplata_po_polisa, sporedba_fakturi, kontrola_fakturi, nepresmetani_fakturi).
+    nepresmetani_fakturi = naplateni fakturi (vo dadeniot mesec) za koi nema pronajdena presmetka.
+    """
+    naplata_work = naplata_df.copy()
+    if not naplata_work.empty:
+        naplata_work["_polisa"] = _series_text(naplata_work, "polisa")
+        naplata_work["_faktura"] = _series_text(naplata_work, "faktura")
+        naplata_work["_os_aneks_fakturaid"] = _series_text(naplata_work, "os_aneks_fakturaid")
+        naplata_work["_faktura_key"] = naplata_work["_faktura"].str.upper()
+        naplata_work["_sporedba_key"] = naplata_work["_os_aneks_fakturaid"].where(
+            naplata_work["_os_aneks_fakturaid"] != "",
+            naplata_work["_faktura_key"],
+        )
+        naplata_work["_client_naziv"] = _series_text(naplata_work, "client_naziv")
+        naplata_work["_agent_naziv"] = _series_text(naplata_work, "agent_naziv")
+        naplata_work["_par_agentid"] = _series_text(naplata_work, "par_agent_id")
+        naplata_work["_iznos_p"] = _series_num(naplata_work, "iznos_p")
+        naplata_work["_iznos_p_den"] = _series_num(naplata_work, "iznos_p_den")
+        naplata_work["_iznos_d"] = _series_num(naplata_work, "iznos_d")
+        naplata_work["_iznos_d_den"] = _series_num(naplata_work, "iznos_d_den")
+        naplata_work["_faktura_iznos"] = _series_num(naplata_work, "faktura_iznos")
+        naplata_work["_faktura_naplata_vkupno"] = _series_num(naplata_work, "faktura_naplata_vkupno")
+        naplata_work["_faktura_naplata_do_period"] = _series_num(naplata_work, "faktura_naplata_do_period")
+        naplata_work["_lc_bodovi_count"] = _series_num(naplata_work, "lc_bodovi_count")
+        naplata_work["_lc_iznos_bod"] = _series_num(naplata_work, "lc_iznos_bod")
+        naplata_work["_promoter_bodovi_count"] = _series_num(naplata_work, "promoter_bodovi_count")
+        naplata_work["_lc_presmetki_count"] = _series_num(naplata_work, "lc_presmetki_count")
+        naplata_work["_promoter_presmetki_count"] = _series_num(naplata_work, "promoter_presmetki_count")
+        naplata_work["_agent_status"] = _series_text(naplata_work, "agent_status").str.upper()
+        naplata_work["_prov_agentid"] = _series_text(naplata_work, "prov_agentid")
+        naplata_work["_prov_agent_naziv"] = _series_text(naplata_work, "prov_agent_naziv")
+        naplata_work["_prov_agent_config_count"] = _series_num(naplata_work, "prov_agent_config_count")
+
+        naplata_zbiren = naplata_work.groupby(["_polisa", "_faktura", "_os_aneks_fakturaid", "_sporedba_key"], dropna=False).agg(
+            client_naziv=("_client_naziv", "first"),
+            agent_naziv=("_agent_naziv", "first"),
+            agentid=("_par_agentid", "first"),
+            broj_naplati=("_sporedba_key", "size"),
+            vk_iznos_p=("_iznos_p", "sum"),
+            vk_iznos_p_den=("_iznos_p_den", "sum"),
+            vk_iznos_d=("_iznos_d", "sum"),
+            vk_iznos_d_den=("_iznos_d_den", "sum"),
+            # Vkupen iznos na fakturata i kumulativna naplata (vrati_naplata UDF) niz SITE
+            # meseci — ne samo za izbraniot period — za da moze pravilno da se oceni dali
+            # fakturata e CELOSNO naplatena (mesecno-skopiraniot vk_iznos_p/vk_iznos_d
+            # gore ne e dovolen, bidejki naplata/dolgot mozat da se knizat vo razlicni meseci).
+            faktura_iznos=("_faktura_iznos", "first"),
+            faktura_naplata_vkupno=("_faktura_naplata_vkupno", "first"),
+            faktura_naplata_do_period=("_faktura_naplata_do_period", "first"),
+            lc_bodovi_count=("_lc_bodovi_count", "first"),
+            lc_iznos_bod=("_lc_iznos_bod", "first"),
+            promoter_bodovi_count=("_promoter_bodovi_count", "first"),
+            lc_presmetki_count=("_lc_presmetki_count", "first"),
+            promoter_presmetki_count=("_promoter_presmetki_count", "first"),
+            agent_status=("_agent_status", "first"),
+            prov_agentid=("_prov_agentid", "first"),
+            prov_agent_naziv=("_prov_agent_naziv", "first"),
+            prov_agent_config_count=("_prov_agent_config_count", "first"),
+        ).reset_index().rename(columns={
+            "_polisa": "polisa",
+            "_faktura": "faktura",
+            "_os_aneks_fakturaid": "os_aneks_fakturaid",
+        })
+        naplata_po_polisa = naplata_work.groupby(["_polisa"], dropna=False).agg(
+            broj_fakturi=("_faktura", "nunique"),
+            broj_aneksi=("_os_aneks_fakturaid", "nunique"),
+            broj_naplati=("_polisa", "size"),
+            client_naziv=("_client_naziv", "first"),
+            agent_naziv=("_agent_naziv", "first"),
+            vk_iznos_p=("_iznos_p", "sum"),
+            vk_iznos_p_den=("_iznos_p_den", "sum"),
+            vk_iznos_d=("_iznos_d", "sum"),
+            vk_iznos_d_den=("_iznos_d_den", "sum"),
+        ).reset_index().rename(columns={"_polisa": "polisa"})
+    else:
+        naplata_zbiren = pd.DataFrame(columns=[
+            "polisa", "faktura", "os_aneks_fakturaid", "_sporedba_key", "client_naziv", "agent_naziv", "agentid",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "faktura_iznos", "faktura_naplata_vkupno", "faktura_naplata_do_period",
+            "lc_bodovi_count", "lc_iznos_bod", "promoter_bodovi_count",
+            "lc_presmetki_count", "promoter_presmetki_count"
+            , "agent_status", "prov_agentid", "prov_agent_naziv", "prov_agent_config_count"
+        ])
+        naplata_po_polisa = pd.DataFrame(columns=[
+            "polisa", "broj_fakturi", "broj_aneksi", "broj_naplati", "client_naziv", "agent_naziv",
+            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den"
+        ])
+
+    presmetka_fakturi_work = work[work["_sporedba_key"] != ""]
+    presmetani_fakturi = presmetka_fakturi_work.groupby("_sporedba_key", dropna=False).agg(
+        presmetka_polisa=("_polisa_broj", "first"),
+        presmetka_faktura=("_faktura", "first"),
+        presmetka_os_aneks_fakturaid=("_os_aneks_fakturaid", "first"),
+        broj_presmetki=("_sporedba_key", "size"),
+        broj_agenti=("_par_agentid", "nunique"),
+        presmetana_provizija=("_iznos_provizija", "sum"),
+        presmetana_naplata=("_naplata", "sum"),
+    ).reset_index()
+
+    sporedba_fakturi = naplata_zbiren.merge(
+        presmetani_fakturi,
+        on="_sporedba_key",
+        how="outer",
+        indicator=True,
+    )
+    if not sporedba_fakturi.empty:
+        for col in ["broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+                    "broj_presmetki", "broj_agenti", "presmetana_provizija", "presmetana_naplata",
+                    "faktura_iznos", "faktura_naplata_vkupno", "faktura_naplata_do_period",
+                    "lc_bodovi_count", "lc_iznos_bod", "promoter_bodovi_count",
+                    "lc_presmetki_count", "promoter_presmetki_count", "prov_agent_config_count"]:
+            sporedba_fakturi[col] = pd.to_numeric(sporedba_fakturi[col], errors="coerce").fillna(0)
+
+        sporedba_fakturi["faktura_sporedba"] = sporedba_fakturi["faktura"].fillna(sporedba_fakturi["presmetka_faktura"])
+        sporedba_fakturi["polisa_sporedba"] = sporedba_fakturi["polisa"].fillna(sporedba_fakturi["presmetka_polisa"])
+        sporedba_fakturi["os_aneks_fakturaid_sporedba"] = sporedba_fakturi["os_aneks_fakturaid"].fillna(
+            sporedba_fakturi["presmetka_os_aneks_fakturaid"]
+        )
+        sporedba_fakturi["razlika_naplata"] = sporedba_fakturi["vk_iznos_p"] - sporedba_fakturi["presmetana_naplata"]
+        # prov_promotori_tp_ex/agenti_provizija ne gi vrakja TBS fakturite
+        # (faktura tip 2974, bodovi tip 285/1128) poradi strogiot join po
+        # par_tip_kniziid. Osnovnite presmetkovni tabeli se avtoritativni:
+        # ako fakturata postoi tamu, taa e presmetana i ne smee povtorno da se
+        # prijavi kako NAPLATENA_NE_PRESMETANA.
+        ima_presmetka_vo_base = (
+            sporedba_fakturi["lc_presmetki_count"].gt(0)
+            | sporedba_fakturi["promoter_presmetki_count"].gt(0)
+        )
+        ima_bilo_kakva_presmetka = sporedba_fakturi["broj_presmetki"].gt(0) | ima_presmetka_vo_base
+        sporedba_fakturi["presmetana"] = ima_bilo_kakva_presmetka.map({True: "DA", False: "NE"})
+        sporedba_fakturi["ima_naplata"] = sporedba_fakturi["broj_naplati"].gt(0).map({True: "DA", False: "NE"})
+
+        sporedba_fakturi["status_sporedba"] = "OK"
+        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "left_only", "status_sporedba"] = "NAPLATENA_NE_PRESMETANA"
+        sporedba_fakturi.loc[
+            (sporedba_fakturi["_merge"] == "left_only") & ima_presmetka_vo_base,
+            "status_sporedba",
+        ] = "PRESMETANA_VO_BASE_NEVIDLIVA_VO_VIEW"
+        # Proveri ja naplatata do posledniot den od izbraniot period. vrati_naplata()
+        # ne e dovolna tuka, bidejki vklucuva i naplati od podocnezhni meseci.
+        polisa_za_status = sporedba_fakturi["polisa_sporedba"].fillna("").astype(str)
+        specijalen_prefiks = polisa_za_status.str.startswith("19/") | polisa_za_status.str.startswith("25/")
+        celosna_do_period = sporedba_fakturi["faktura_naplata_do_period"] >= (
+            sporedba_fakturi["faktura_iznos"] - 0.01
+        )
+        sporedba_fakturi.loc[
+            (sporedba_fakturi["_merge"] == "left_only")
+            & ~ima_presmetka_vo_base
+            & ~specijalen_prefiks
+            & ~celosna_do_period,
+            "status_sporedba",
+        ] = "NECELOSNO_NAPLATENA_ZA_PERIOD"
+        missing_and_paid = (
+            (sporedba_fakturi["_merge"] == "left_only")
+            & ~ima_presmetka_vo_base
+            & celosna_do_period
+        )
+        no_points = sporedba_fakturi["lc_bodovi_count"].eq(0) & sporedba_fakturi["promoter_bodovi_count"].eq(0)
+        lc_zero = sporedba_fakturi["lc_bodovi_count"].gt(0) & sporedba_fakturi["lc_iznos_bod"].abs().le(0.01)
+        sporedba_fakturi.loc[missing_and_paid & no_points, "status_sporedba"] = "NEMA_BODOVI"
+        sporedba_fakturi.loc[missing_and_paid & lc_zero, "status_sporedba"] = "LC_IZNOS_BOD_NULA"
+        sporedba_fakturi.loc[
+            missing_and_paid & sporedba_fakturi["lc_bodovi_count"].gt(0) & ~lc_zero,
+            "status_sporedba",
+        ] = "LC_BODOVI_NO_NEMA_PRESMETKA"
+        sporedba_fakturi.loc[
+            missing_and_paid
+            & sporedba_fakturi["lc_bodovi_count"].eq(0)
+            & sporedba_fakturi["promoter_bodovi_count"].gt(0),
+            "status_sporedba",
+        ] = "PROMOTOR_BODOVI_NO_NEMA_PRESMETKA"
+        nema_prov_config = sporedba_fakturi["prov_agent_config_count"].eq(0)
+        sporedba_fakturi.loc[
+            missing_and_paid & nema_prov_config,
+            "status_sporedba",
+        ] = "AGENT_NEMA_DEFINIRANA_PROVIZIJA"
+        # Status Z e ocekuvana delovna blokada, a ne greska vo presmetkata.
+        # Ovaa proverka e posledna za missing+paid za da ima prednost nad
+        # generickite LC/promoter statusi pogore.
+        zatvoren_agent = sporedba_fakturi["agent_status"].fillna("").astype(str).str.upper().eq("Z")
+        sporedba_fakturi.loc[missing_and_paid & zatvoren_agent, "status_sporedba"] = "AGENT_ZATVOREN"
+        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "right_only", "status_sporedba"] = "PRESMETANA_NE_NAPLATENA"
+        sporedba_fakturi.loc[
+            (sporedba_fakturi["_merge"] == "both") & (sporedba_fakturi["razlika_naplata"].abs() > 0.01),
+            "status_sporedba"
+        ] = "RAZLIKA_NAPLATA"
+
+        sporedba_fakturi["komentar"] = sporedba_fakturi["status_sporedba"].map({
+            "OK": "naplata i presmetka se poklopuvaat po os_aneks_fakturaid/faktura",
+            "NAPLATENA_NE_PRESMETANA": "naplatena faktura ne e pronajdena vo prov_promotori_tp_ex",
+            "NECELOSNO_NAPLATENA_ZA_PERIOD": "fakturata ne e celosno naplatena do krajot na izbraniot mesec",
+            "NEMA_BODOVI": "nema bodovi ni vo LC ni vo promoter presmetkata",
+            "LC_IZNOS_BOD_NULA": "postojat LC bodovi, no iznos_bod e nula",
+            "LC_BODOVI_NO_NEMA_PRESMETKA": "postojat LC bodovi, no nema LC presmetka za fakturata",
+            "PROMOTOR_BODOVI_NO_NEMA_PRESMETKA": "postojat promoter bodovi, no nema promoter presmetka za fakturata",
+            "AGENT_NEMA_DEFINIRANA_PROVIZIJA": "agentot nema vazhechka definicija vo provizija_agent; za toj agent ne se presmetuva provizija",
+            "AGENT_ZATVOREN": "agentot e zatvoren (status=Z); ponatamosna provizija ne se presmetuva",
+            "PRESMETANA_VO_BASE_NEVIDLIVA_VO_VIEW": "presmetkata postoi vo osnovnata tabela, no staroto view ne ja prikazuva poradi tipot na knizenje",
+            "PRESMETANA_NE_NAPLATENA": "presmetana faktura ne e pronajdena vo naplata",
+            "RAZLIKA_NAPLATA": "postoi razlika pomegju naplata i presmetana naplata"
+        })
+        zatvoren_mask = sporedba_fakturi["status_sporedba"].eq("AGENT_ZATVOREN")
+        sporedba_fakturi.loc[zatvoren_mask, "komentar"] = (
+            "Agent "
+            + sporedba_fakturi.loc[zatvoren_mask, "prov_agentid"].fillna("").astype(str)
+            + " e zatvoren (status=Z)."
+        )
+        nema_config_mask = sporedba_fakturi["status_sporedba"].eq("AGENT_NEMA_DEFINIRANA_PROVIZIJA")
+        sporedba_fakturi.loc[nema_config_mask, "komentar"] = (
+            "Za agent "
+            + sporedba_fakturi.loc[nema_config_mask, "prov_agentid"].fillna("").astype(str)
+            + " ne se presmetuva provizija bidejki ne e definiran vo provizija_agent."
+        )
+        sporedba_fakturi = sporedba_fakturi[[
+            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv", "agentid",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "faktura_iznos", "faktura_naplata_vkupno", "faktura_naplata_do_period",
+            "lc_bodovi_count", "lc_iznos_bod", "promoter_bodovi_count",
+            "lc_presmetki_count", "promoter_presmetki_count",
+            "agent_status",
+            "prov_agentid", "prov_agent_naziv", "prov_agent_config_count",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ]]
+        kontrola_fakturi = sporedba_fakturi[sporedba_fakturi["ima_naplata"] == "DA"].copy()
+    else:
+        sporedba_fakturi = pd.DataFrame(columns=[
+            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv", "agentid",
+            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "faktura_iznos", "faktura_naplata_vkupno", "faktura_naplata_do_period",
+            "lc_bodovi_count", "lc_iznos_bod", "promoter_bodovi_count",
+            "lc_presmetki_count", "promoter_presmetki_count",
+            "agent_status",
+            "prov_agentid", "prov_agent_naziv", "prov_agent_config_count",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ])
+        kontrola_fakturi = pd.DataFrame(columns=[
+            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv", "agentid", "broj_naplati",
+            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
+            "faktura_iznos", "faktura_naplata_vkupno", "faktura_naplata_do_period",
+            "lc_bodovi_count", "lc_iznos_bod", "promoter_bodovi_count",
+            "lc_presmetki_count", "promoter_presmetki_count",
+            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
+            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
+            "ima_naplata", "presmetana", "komentar"
+        ])
+
+    nepresmetani_fakturi = kontrola_fakturi[kontrola_fakturi["presmetana"] == "NE"].copy() if "presmetana" in kontrola_fakturi.columns else kontrola_fakturi.copy()
+
+    # Za polisi BEZ prefiks "19/" ili "25/" flagiraj kako nepresmetana samo ako
+    # naplatata e celosna (vk_iznos_p >= vk_iznos_d) — dodeka naplatata e
+    # delumna, ocekuvano e presmetkata na provizija da uste ne postoi.
+    # Polisite so prefiks "19/"/"25/" ne podlezat na ova ogranicuvanje
+    # (ista logika kako "19/" isklucuvanjeto vo kontrola_polisi.py).
+    if not nepresmetani_fakturi.empty and "polisa_sporedba" in nepresmetani_fakturi.columns:
+        polisa_txt = nepresmetani_fakturi["polisa_sporedba"].fillna("").astype(str)
+        ima_specijalen_prefiks = polisa_txt.str.startswith("19/") | polisa_txt.str.startswith("25/")
+        # Sporeduva vkupniot iznos na fakturata (os_aneks_faktura.iznos) so KUMULATIVNATA
+        # naplata (vrati_naplata UDF, site meseci) — ne mesecno-skopiraniot vk_iznos_p/
+        # vk_iznos_d, bidejki dolgot i naplatata mozat da bidat knizeni vo razlicni meseci.
+        celosna_naplata = nepresmetani_fakturi["faktura_naplata_vkupno"] >= (
+            nepresmetani_fakturi["faktura_iznos"] - 0.01
+        )
+        # Ne gi otfrlaj necelosno naplatenite: statusot pogore ja objasnuva pricinata
+        # i korisnikot treba da gi vidi vo pregledot za izbraniot mesec.
+
+    return naplata_zbiren, naplata_po_polisa, sporedba_fakturi, kontrola_fakturi, nepresmetani_fakturi
+
+
 def _build_multilevel_workbook(
     df: pd.DataFrame,
     naplata_df: pd.DataFrame,
@@ -1311,9 +2119,13 @@ def _build_multilevel_workbook(
     ).reset_index().rename(columns={"_par_agentid": "par_agentid", "_agent_name": "agent_name"})
     licna = work[work["_nacin_provizija"] == "Лична"].groupby("_par_agentid")["_iznos_provizija"].sum()
     timska = work[work["_nacin_provizija"] == "Тимска"].groupby("_par_agentid")["_iznos_provizija"].sum()
+    nedefinirana = work[~work["_nacin_provizija"].isin(["Лична", "Тимска"])].groupby("_par_agentid")["_iznos_provizija"].sum()
     agent_zbiren["licna_provizija"] = agent_zbiren["par_agentid"].map(licna).fillna(0)
     agent_zbiren["timska_provizija"] = agent_zbiren["par_agentid"].map(timska).fillna(0)
-    agent_zbiren["vkupna_provizija"] = agent_zbiren["licna_provizija"] + agent_zbiren["timska_provizija"]
+    agent_zbiren["nedefinirana_provizija"] = agent_zbiren["par_agentid"].map(nedefinirana).fillna(0)
+    agent_zbiren["vkupna_provizija"] = (
+        agent_zbiren["licna_provizija"] + agent_zbiren["timska_provizija"] + agent_zbiren["nedefinirana_provizija"]
+    )
 
     current_bodovi = work.assign(
         _is_licna=work["_nacin_provizija"].str.contains("Лична|Licna", case=False, na=False),
@@ -1406,129 +2218,7 @@ def _build_multilevel_workbook(
         "_rata": "rata",
     })
 
-    naplata_work = naplata_df.copy()
-    if not naplata_work.empty:
-        naplata_work["_polisa"] = _series_text(naplata_work, "polisa")
-        naplata_work["_faktura"] = _series_text(naplata_work, "faktura")
-        naplata_work["_os_aneks_fakturaid"] = _series_text(naplata_work, "os_aneks_fakturaid")
-        naplata_work["_faktura_key"] = naplata_work["_faktura"].str.upper()
-        naplata_work["_sporedba_key"] = naplata_work["_os_aneks_fakturaid"].where(
-            naplata_work["_os_aneks_fakturaid"] != "",
-            naplata_work["_faktura_key"],
-        )
-        naplata_work["_client_naziv"] = _series_text(naplata_work, "client_naziv")
-        naplata_work["_agent_naziv"] = _series_text(naplata_work, "agent_naziv")
-        naplata_work["_iznos_p"] = _series_num(naplata_work, "iznos_p")
-        naplata_work["_iznos_p_den"] = _series_num(naplata_work, "iznos_p_den")
-        naplata_work["_iznos_d"] = _series_num(naplata_work, "iznos_d")
-        naplata_work["_iznos_d_den"] = _series_num(naplata_work, "iznos_d_den")
-
-        naplata_zbiren = naplata_work.groupby(["_polisa", "_faktura", "_os_aneks_fakturaid", "_sporedba_key"], dropna=False).agg(
-            client_naziv=("_client_naziv", "first"),
-            agent_naziv=("_agent_naziv", "first"),
-            broj_naplati=("_sporedba_key", "size"),
-            vk_iznos_p=("_iznos_p", "sum"),
-            vk_iznos_p_den=("_iznos_p_den", "sum"),
-            vk_iznos_d=("_iznos_d", "sum"),
-            vk_iznos_d_den=("_iznos_d_den", "sum"),
-        ).reset_index().rename(columns={
-            "_polisa": "polisa",
-            "_faktura": "faktura",
-            "_os_aneks_fakturaid": "os_aneks_fakturaid",
-        })
-        naplata_po_polisa = naplata_work.groupby(["_polisa"], dropna=False).agg(
-            broj_fakturi=("_faktura", "nunique"),
-            broj_aneksi=("_os_aneks_fakturaid", "nunique"),
-            broj_naplati=("_polisa", "size"),
-            client_naziv=("_client_naziv", "first"),
-            agent_naziv=("_agent_naziv", "first"),
-            vk_iznos_p=("_iznos_p", "sum"),
-            vk_iznos_p_den=("_iznos_p_den", "sum"),
-            vk_iznos_d=("_iznos_d", "sum"),
-            vk_iznos_d_den=("_iznos_d_den", "sum"),
-        ).reset_index().rename(columns={"_polisa": "polisa"})
-    else:
-        naplata_zbiren = pd.DataFrame(columns=[
-            "polisa", "faktura", "os_aneks_fakturaid", "_sporedba_key", "client_naziv", "agent_naziv",
-            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den"
-        ])
-        naplata_po_polisa = pd.DataFrame(columns=[
-            "polisa", "broj_fakturi", "broj_aneksi", "broj_naplati", "client_naziv", "agent_naziv",
-            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den"
-        ])
-
-    presmetka_fakturi_work = work[work["_sporedba_key"] != ""]
-    presmetani_fakturi = presmetka_fakturi_work.groupby("_sporedba_key", dropna=False).agg(
-        presmetka_polisa=("_polisa_broj", "first"),
-        presmetka_faktura=("_faktura", "first"),
-        presmetka_os_aneks_fakturaid=("_os_aneks_fakturaid", "first"),
-        broj_presmetki=("_sporedba_key", "size"),
-        broj_agenti=("_par_agentid", "nunique"),
-        presmetana_provizija=("_iznos_provizija", "sum"),
-        presmetana_naplata=("_naplata", "sum"),
-    ).reset_index()
-
-    sporedba_fakturi = naplata_zbiren.merge(
-        presmetani_fakturi,
-        on="_sporedba_key",
-        how="outer",
-        indicator=True,
-    )
-    if not sporedba_fakturi.empty:
-        for col in ["broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
-                    "broj_presmetki", "broj_agenti", "presmetana_provizija", "presmetana_naplata"]:
-            sporedba_fakturi[col] = pd.to_numeric(sporedba_fakturi[col], errors="coerce").fillna(0)
-
-        sporedba_fakturi["faktura_sporedba"] = sporedba_fakturi["faktura"].fillna(sporedba_fakturi["presmetka_faktura"])
-        sporedba_fakturi["polisa_sporedba"] = sporedba_fakturi["polisa"].fillna(sporedba_fakturi["presmetka_polisa"])
-        sporedba_fakturi["os_aneks_fakturaid_sporedba"] = sporedba_fakturi["os_aneks_fakturaid"].fillna(
-            sporedba_fakturi["presmetka_os_aneks_fakturaid"]
-        )
-        sporedba_fakturi["razlika_naplata"] = sporedba_fakturi["vk_iznos_p"] - sporedba_fakturi["presmetana_naplata"]
-        sporedba_fakturi["presmetana"] = sporedba_fakturi["broj_presmetki"].gt(0).map({True: "DA", False: "NE"})
-        sporedba_fakturi["ima_naplata"] = sporedba_fakturi["broj_naplati"].gt(0).map({True: "DA", False: "NE"})
-
-        sporedba_fakturi["status_sporedba"] = "OK"
-        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "left_only", "status_sporedba"] = "NAPLATENA_NE_PRESMETANA"
-        sporedba_fakturi.loc[sporedba_fakturi["_merge"] == "right_only", "status_sporedba"] = "PRESMETANA_NE_NAPLATENA"
-        sporedba_fakturi.loc[
-            (sporedba_fakturi["_merge"] == "both") & (sporedba_fakturi["razlika_naplata"].abs() > 0.01),
-            "status_sporedba"
-        ] = "RAZLIKA_NAPLATA"
-
-        sporedba_fakturi["komentar"] = sporedba_fakturi["status_sporedba"].map({
-            "OK": "naplata i presmetka se poklopuvaat po os_aneks_fakturaid/faktura",
-            "NAPLATENA_NE_PRESMETANA": "naplatena faktura ne e pronajdena vo prov_promotori_tp_ex",
-            "PRESMETANA_NE_NAPLATENA": "presmetana faktura ne e pronajdena vo naplata",
-            "RAZLIKA_NAPLATA": "postoi razlika pomegju naplata i presmetana naplata"
-        })
-        sporedba_fakturi = sporedba_fakturi[[
-            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
-            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv",
-            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
-            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
-            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
-            "ima_naplata", "presmetana", "komentar"
-        ]]
-        kontrola_fakturi = sporedba_fakturi[sporedba_fakturi["ima_naplata"] == "DA"].copy()
-    else:
-        sporedba_fakturi = pd.DataFrame(columns=[
-            "status_sporedba", "polisa_sporedba", "faktura_sporedba", "os_aneks_fakturaid_sporedba",
-            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv",
-            "broj_naplati", "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
-            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
-            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
-            "ima_naplata", "presmetana", "komentar"
-        ])
-        kontrola_fakturi = pd.DataFrame(columns=[
-            "polisa", "faktura", "os_aneks_fakturaid", "client_naziv", "agent_naziv", "broj_naplati",
-            "vk_iznos_p", "vk_iznos_p_den", "vk_iznos_d", "vk_iznos_d_den",
-            "presmetka_polisa", "presmetka_faktura", "presmetka_os_aneks_fakturaid", "broj_presmetki", "broj_agenti",
-            "presmetana_provizija", "presmetana_naplata", "razlika_naplata",
-            "ima_naplata", "presmetana", "komentar"
-        ])
-
-    nepresmetani_fakturi = kontrola_fakturi[kontrola_fakturi["presmetana"] == "NE"].copy() if "presmetana" in kontrola_fakturi.columns else kontrola_fakturi.copy()
+    naplata_zbiren, naplata_po_polisa, sporedba_fakturi, kontrola_fakturi, nepresmetani_fakturi = _compute_sporedba_fakturi(work, naplata_df)
     neusoglaseni_fakturi = sporedba_fakturi[sporedba_fakturi["status_sporedba"] != "OK"].copy() if "status_sporedba" in sporedba_fakturi.columns else sporedba_fakturi.copy()
 
     zbirna_provizija = zbiren_df.copy()
@@ -1592,7 +2282,9 @@ def _build_multilevel_workbook(
             "nacin_provizija", "presmetana_provizija", "isplatena_provizija", "saldo", "komentar"
         ])
 
-    struktura = agent_zbiren[["par_agentid", "agent_name", "licna_provizija", "timska_provizija", "vkupna_provizija"]].copy()
+    struktura = agent_zbiren[[
+        "par_agentid", "agent_name", "licna_provizija", "timska_provizija", "vkupna_provizija"
+    ]].copy()
     structure_work = agent_structure_df.copy()
     if not structure_work.empty:
         structure_work.columns = [str(c).lower() for c in structure_work.columns]
@@ -1641,24 +2333,28 @@ def _build_multilevel_workbook(
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        _write_sheet(writer, grid_results, "Grid Results")
-        _write_sheet(writer, summary, "Summary")
-        _write_sheet(writer, agent_zbiren, "Agent_Zbiren")
-        _write_sheet(writer, zbirna_provizija, "Zbirna_Provizija")
-        _write_sheet(writer, sporedba_zbirna, "Sporedba_Zbirna")
-        _write_sheet(writer, polisa_zbiren, "Polisa_Zbiren")
-        _write_sheet(writer, naplata_po_polisa, "Naplata_Po_Polisa")
-        _write_sheet(writer, naplata_zbiren.drop(columns=["_sporedba_key"], errors="ignore"), "Naplata_Zbiren")
-        _write_sheet(writer, kontrola_fakturi, "Kontrola_Fakturi")
-        _write_sheet(writer, sporedba_fakturi, "Sporedba_Fakturi")
-        _write_sheet(writer, sporedba_bodovi, "Sporedba_Bodovi")
-        _write_sheet(writer, dosegasni_bodovi_df, "Dosegasni_Bodovi")
-        _write_sheet(writer, nepresmetani_fakturi, "Nepresmetani_Fakturi")
+        # Aktivni sheetovi (po dogovor):
         _write_sheet(writer, df, "Detalno")
-        _write_sheet(writer, naplata_df, "Naplata_Detalno")
-        _write_sheet(writer, kontrola_dupli, "Kontrola_Dupli")
-        _write_sheet(writer, negativno_saldo, "Negativno_Saldo")
+        _write_sheet(writer, summary, "Summary")
         _write_sheet(writer, struktura, "Struktura")
+        _write_sheet(writer, naplata_df, "Naplata")
+        _write_sheet(writer, nepresmetani_fakturi, "Nepresmetani_Fakturi")
+
+        # Sokrieni za sega (presmetkata ostanuva, samo ne se pisuvaat vo Excel) —
+        # otkomentiraj po potreba:
+        # _write_sheet(writer, grid_results, "Grid Results")
+        # _write_sheet(writer, agent_zbiren, "Agent_Zbiren")
+        # _write_sheet(writer, naplata_po_polisa, "Naplata_Po_Polisa")
+        # _write_sheet(writer, sporedba_fakturi, "Sporedba_Fakturi")
+        # _write_sheet(writer, kontrola_dupli, "Kontrola_Dupli")
+        # _write_sheet(writer, negativno_saldo, "Negativno_Saldo")
+        # _write_sheet(writer, zbirna_provizija, "Zbirna_Provizija")
+        # _write_sheet(writer, sporedba_zbirna, "Sporedba_Zbirna")
+        # _write_sheet(writer, polisa_zbiren, "Polisa_Zbiren")
+        # _write_sheet(writer, naplata_zbiren.drop(columns=["_sporedba_key"], errors="ignore"), "Naplata_Zbiren")
+        # _write_sheet(writer, kontrola_fakturi, "Kontrola_Fakturi")
+        # _write_sheet(writer, sporedba_bodovi, "Sporedba_Bodovi")
+        # _write_sheet(writer, dosegasni_bodovi_df, "Dosegasni_Bodovi")
     output.seek(0)
 
     try:
@@ -2063,6 +2759,58 @@ def multilevel_dashboard(payload: MultilevelPreglediRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating multilevel dashboard: {e}")
+
+
+def _clean_nan(rows: list[dict]) -> list[dict]:
+    for row in rows:
+        for key, value in row.items():
+            if isinstance(value, float) and math.isnan(value):
+                row[key] = None
+    return rows
+
+
+@router.post("/api/multilevel-nepresmetani-polisi")
+def multilevel_nepresmetani_polisi(payload: MultilevelPreglediRequest, request: Request):
+    """
+    Naplateni fakturi (po pregled na fakturi za dadeniot mesec) za koi nema
+    pronajdena presmetana provizija vo prov_promotori_tp_ex.
+    """
+    user = request.session.get("user", {})
+    if not has_any_role(user, "admin", "provizia"):
+        raise HTTPException(status_code=403)
+    try:
+        _validate_multilevel_payload(payload)
+        df = _fetch_multilevel_provizija(
+            payload.month,
+            payload.year,
+            payload.polisa_broj,
+            payload.agent_id,
+            payload.region_id,
+            payload.team_id,
+            dashboard_only=True,
+        )
+        naplata_df = _fetch_report_naplata(
+            payload.month,
+            payload.year,
+            payload.polisa_broj,
+            payload.agent_id,
+            payload.region_id,
+            payload.team_id,
+        )
+        work = _prep_sporedba_work(df)
+        _, _, _, _, nepresmetani_fakturi = _compute_sporedba_fakturi(work, naplata_df)
+
+        rows = _clean_nan(nepresmetani_fakturi.to_dict("records"))
+        return {
+            "success": True,
+            "count": len(rows),
+            "rows": rows,
+            "vkupno_naplata": float(nepresmetani_fakturi["vk_iznos_p"].sum()) if not nepresmetani_fakturi.empty else 0,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 
 @router.post("/api/exportEksel")

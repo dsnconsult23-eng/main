@@ -46,9 +46,6 @@ def informix_cursor():
     url = f"jdbc:informix-sqli://{DB_HOST}:{DB_PORT}/{DB_NAME}:DB_LOCALE=en_US.utf8"
     jars = _informix_jars() + _ucanaccess_classpath()
 
-    print("[DEBUG] JDBC URL:", url)
-    print("[DEBUG] JARs:", jars)
-
     conn = jaydebeapi.connect("com.informix.jdbc.IfxDriver", url, [DB_USER, DB_PASS], jars)
     try:
         yield conn.cursor()
@@ -56,22 +53,11 @@ def informix_cursor():
         conn.close()
 
 def Informixdriver():
-    """
-    Returns a live Informix connection.
-    Usage:
-        conn = Informixdriver()
-        curs = conn.cursor()
-        curs.execute("SELECT * FROM my_table")
-        conn.close()
-    """
+    """Returns a live Informix connection. Caller is responsible for closing it."""
     if not DB_PASS:
         raise RuntimeError("Please set IFX_PASS environment variable.")
 
     url = f"jdbc:informix-sqli://{DB_HOST}:{DB_PORT}/{DB_NAME}:DB_LOCALE=en_US.utf8"
     jars = _informix_jars() + _ucanaccess_classpath()
 
-    print("[DEBUG] JDBC URL:", url)
-    print("[DEBUG] JARs:", jars)
-
-    conn = jaydebeapi.connect("com.informix.jdbc.IfxDriver", url, [DB_USER, DB_PASS], jars)
-    return conn
+    return jaydebeapi.connect("com.informix.jdbc.IfxDriver", url, [DB_USER, DB_PASS], jars)

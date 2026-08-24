@@ -1,0 +1,700 @@
+<title>360° Преглед на клиент — SigLife Reporting</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #1a3a5c;
+    --navy-2: #2c3e50;
+    --blue: #2980b9;
+    --blue-soft: #eaf4fb;
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface-2: #eef2f7;
+    --border: #e1e6ec;
+    --border-strong: #d5dbe3;
+    --text: #2c3e50;
+    --text-soft: #5d6d7e;
+    --text-faint: #95a5a6;
+    --success: #27ae60;
+    --success-soft: #eafaf1;
+    --warning: #f39c12;
+    --warning-soft: #fef9e7;
+    --critical: #e74c3c;
+    --critical-soft: #fdecea;
+    --shadow: 0 1px 6px rgba(0,0,0,0.07);
+  }
+
+  body, html {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  table { font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+
+  /* ── SIDEBAR (matches base.html) ── */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 230px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
+    color: #ecf0f1;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+  .sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .sidebar-brand .mark {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 0.6rem;
+    color: var(--navy);
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 0.4px;
+  }
+  .sidebar-brand span { font-size: 0.72rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+  .sidebar nav { flex: 1; padding: 0.75rem 0; }
+  .sidebar nav a {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.65rem 1.2rem;
+    text-decoration: none;
+    color: rgba(255,255,255,0.78);
+    font-size: 0.88rem; font-weight: 500;
+    border-left: 3px solid transparent;
+  }
+  .sidebar nav a:hover, .sidebar nav a.active {
+    background: rgba(255,255,255,0.08);
+    border-left-color: var(--blue);
+    color: #fff;
+  }
+  .sidebar-section {
+    padding: 0.5rem 1.2rem 0.2rem;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; color: rgba(255,255,255,0.3);
+    margin-top: 0.4rem;
+  }
+
+  /* ── MAIN ── */
+  .main-content { margin-left: 230px; min-height: 100vh; width: calc(100% - 230px); }
+
+  header.topbar {
+    height: 56px;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem;
+    box-shadow: var(--shadow);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-crumb { font-size: 0.82rem; color: var(--text-faint); }
+  .topbar-crumb b { color: var(--navy); }
+  .header-user { display: flex; align-items: center; gap: 1rem; }
+  .header-user .user-name { font-weight: 600; color: var(--navy-2); font-size: 0.88rem; }
+  .header-user .user-role {
+    font-size: 0.75rem; color: var(--text-soft);
+    background: var(--surface-2); padding: 2px 8px; border-radius: 10px;
+  }
+  .logout-btn {
+    background: var(--critical); color: #fff; padding: 6px 14px; border-radius: 5px;
+    text-decoration: none; font-weight: 600; font-size: 0.85rem;
+  }
+
+  .page-body { padding: 1.5rem 2rem 3rem; }
+
+  .page-title { font-size: 1.35rem; font-weight: 700; color: var(--navy); margin-bottom: 0.35rem; }
+  .page-sub { font-size: 0.85rem; color: var(--text-faint); margin-bottom: 1.25rem; }
+
+  /* ── Identity strip ── */
+  .identity {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+  }
+  .avatar {
+    width: 58px; height: 58px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--navy), var(--blue));
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; flex: none;
+  }
+  .identity-name { font-size: 1.3rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .identity-sub { color: var(--text-soft); font-size: 0.82rem; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .identity-sub span { white-space: nowrap; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2px;
+  }
+  .pill.success { background: var(--success-soft); color: #1e8449; }
+  .pill.warning { background: var(--warning-soft); color: #7d6608; }
+  .pill.critical { background: var(--critical-soft); color: #c0392b; }
+  .pill.neutral { background: var(--surface-2); color: var(--text-soft); }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .identity-stats { display: flex; gap: 28px; }
+  .stat { text-align: right; }
+  .stat-label { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 3px; }
+  .stat-value { font-size: 1.15rem; font-weight: 700; color: var(--navy-2); }
+  .stat-value.accent { color: var(--blue); }
+
+  /* ── App shell (nav + content) ── */
+  .shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+
+  .subnav {
+    position: sticky; top: 76px;
+    display: flex; flex-direction: column; gap: 2px;
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 10px;
+  }
+  .subnav a {
+    display: flex; gap: 8px; align-items: baseline;
+    text-decoration: none; color: var(--text-soft);
+    font-size: 0.82rem; padding: 7px 10px; border-radius: 6px;
+    border-left: 3px solid transparent;
+  }
+  .subnav a:hover { background: var(--surface-2); color: var(--text); }
+  .subnav a.active { color: var(--navy); background: var(--blue-soft); border-left-color: var(--blue); font-weight: 700; }
+  .subnav a .idx { color: var(--text-faint); font-size: 0.72rem; width: 13px; font-weight: 700; }
+  .subnav a.active .idx { color: var(--blue); }
+
+  main { min-width: 0; }
+
+  .card {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+    scroll-margin-top: 76px;
+  }
+  .card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; margin-bottom: 1rem; flex-wrap: wrap;
+    padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
+  }
+  .card-title { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin: 0; }
+  .card-hint { font-size: 0.76rem; color: var(--text-faint); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } .shell { grid-template-columns: 1fr; } }
+
+  .tile { background: var(--surface-2); border-radius: 6px; padding: 12px 14px; }
+  .tile-label { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+  .tile-value { font-size: 1.02rem; font-weight: 700; color: var(--navy-2); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th {
+    background: var(--navy);
+    color: #fff;
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  th.num, td.num { text-align: right; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--blue-soft); }
+  tbody td { padding: 0.55rem 0.85rem; color: var(--text); vertical-align: middle; }
+  .table-wrap { overflow-x: auto; border-radius: 6px; box-shadow: var(--shadow); }
+  .table-wrap table { box-shadow: none; }
+
+  .amt-neg { color: var(--critical); font-weight: 700; }
+
+  .next-action {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--blue-soft);
+    border-left: 4px solid var(--blue);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 4px;
+  }
+  .next-action .glyph { color: var(--blue); font-size: 18px; line-height: 1.2; font-weight: 700; }
+  .next-action .body strong { display: block; font-size: 0.85rem; margin-bottom: 2px; color: var(--navy); }
+  .next-action .body span { font-size: 0.8rem; color: var(--text-soft); }
+
+  .policy-row {
+    display: grid; grid-template-columns: 1fr auto auto auto;
+    gap: 18px; align-items: center;
+    padding: 12px 4px; border-bottom: 1px solid var(--border);
+  }
+  .policy-row:last-child { border-bottom: none; }
+  .policy-name { font-size: 0.92rem; font-weight: 700; color: var(--navy-2); }
+  .policy-sub { font-size: 0.76rem; color: var(--text-faint); margin-top: 2px; }
+  .policy-col-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin-bottom: 3px; }
+  .policy-col-val { font-size: 0.9rem; font-weight: 700; text-align: right; color: var(--navy-2); }
+
+  .claim-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; }
+  .claim-card:last-child { margin-bottom: 0; }
+  .claim-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .claim-top strong { font-size: 0.85rem; color: var(--navy-2); }
+  .claim-meta { font-size: 0.76rem; color: var(--text-faint); margin-top: 4px; }
+
+  .family-list { display: flex; flex-direction: column; gap: 10px; }
+  .family-member { display: flex; align-items: center; gap: 12px; }
+  .family-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface-2); color: var(--navy-2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; flex: none;
+  }
+  .family-name { font-size: 0.85rem; font-weight: 700; color: var(--navy-2); }
+  .family-role { font-size: 0.76rem; color: var(--text-faint); }
+
+  .opp { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 0.85rem; }
+  .opp:last-child { border-bottom: none; }
+
+  .timeline { position: relative; padding-left: 26px; }
+  .timeline::before { content: ""; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 1px; background: var(--border); }
+  .tl-item { position: relative; padding-bottom: 16px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-dot {
+    position: absolute; left: -26px; top: 2px;
+    width: 19px; height: 19px; border-radius: 50%;
+    background: var(--blue-soft); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 10px;
+  }
+  .tl-head { display: flex; justify-content: space-between; gap: 10px; }
+  .tl-head strong { font-size: 0.84rem; color: var(--navy-2); }
+  .tl-when { font-size: 0.72rem; color: var(--text-faint); white-space: nowrap; }
+  .tl-body { font-size: 0.8rem; color: var(--text-soft); margin-top: 2px; }
+
+  .doc-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  .doc-row:last-child { border-bottom: none; }
+  .doc-icon {
+    width: 30px; height: 30px; border-radius: 6px;
+    background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem; font-weight: 800; flex: none;
+  }
+  .doc-name { font-weight: 700; color: var(--navy-2); }
+  .doc-meta { font-size: 0.72rem; color: var(--text-faint); margin-top: 2px; }
+
+  .ai-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .ai-head { display: flex; justify-content: space-between; align-items: center; }
+  .ai-head span.tag { font-size: 0.65rem; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); font-weight: 800; }
+  .meter { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .meter > i { display: block; height: 100%; }
+  .meter.risk-low > i { background: var(--success); }
+  .meter.risk-med > i { background: var(--warning); }
+  .meter.risk-high > i { background: var(--critical); }
+  .ai-figure { font-size: 1.6rem; font-weight: 800; color: var(--navy-2); }
+
+  footer.spec-note {
+    padding: 0 0 20px 2px;
+    color: var(--text-faint);
+    font-size: 0.75rem;
+  }
+</style>
+
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <div class="mark">UNIQA Life</div>
+    <span>Reporting</span>
+  </div>
+  <nav>
+    <a href="#">🏠 Dashboard</a>
+    <div class="sidebar-section">Извештаи</div>
+    <a href="#">📋 АСО извештаи</a>
+    <a href="#">🧾 Преглед на фактури</a>
+    <a href="#">💰 Провизија</a>
+    <div class="sidebar-section">Финансии</div>
+    <a href="#">🏦 Финансии</a>
+    <a href="#">📑 Финансиски извештаи</a>
+    <div class="sidebar-section">Останато</div>
+    <a href="#">📢 Известувања</a>
+    <a href="#" class="active">🪪 360° Клиент</a>
+    <a href="#">🧮 Контрола на полиси</a>
+  </nav>
+</div>
+
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-crumb">Клиенти / <b>360° Преглед</b></div>
+    <div class="header-user">
+      <span class="user-name">Билјана Ефтимова</span>
+      <span class="user-role">agent</span>
+      <a href="#" class="logout-btn">Одјави се</a>
+    </div>
+  </header>
+
+  <div class="page-body">
+    <div class="page-title">360° Преглед на клиент</div>
+    <div class="page-sub">Спецификација на екран — распоред и содржина на модулите</div>
+
+    <div class="identity">
+      <div class="avatar">МС</div>
+      <div>
+        <div class="identity-name">Марија К. Стојановска</div>
+        <div class="identity-sub">
+          <span>ЕМБГ ••••••1105123</span>
+          <span>Customer ID CUST‑0004821</span>
+          <span class="pill success">Активен клиент</span>
+        </div>
+      </div>
+      <div class="identity-stats">
+        <div class="stat">
+          <div class="stat-label">Lifetime Value</div>
+          <div class="stat-value accent">418.900 ден.</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Risk Score</div>
+          <div class="stat-value">Низок</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Следна активност</div>
+          <div class="stat-value" style="font-size:0.95rem;">15.8.2026</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shell">
+      <nav class="subnav" id="nav">
+        <a href="#overview"><span class="idx">1</span>Преглед</a>
+        <a href="#policies"><span class="idx">2</span>Полиси</a>
+        <a href="#finance"><span class="idx">3</span>Финансии</a>
+        <a href="#claims"><span class="idx">4</span>Штети</a>
+        <a href="#medical"><span class="idx">5</span>Медицина / UW</a>
+        <a href="#family"><span class="idx">6</span>Семејство</a>
+        <a href="#sales"><span class="idx">7</span>Продажба</a>
+        <a href="#comms"><span class="idx">8</span>Комуникација</a>
+        <a href="#documents"><span class="idx">9</span>Документи</a>
+        <a href="#ai"><span class="idx">10</span>AI Insights</a>
+      </nav>
+
+      <main>
+
+        <section class="card" id="overview">
+          <div class="card-head">
+            <h2 class="card-title">1 · Преглед (Dashboard)</h2>
+            <span class="card-hint">Прв поглед — статус, вредност, ризик</span>
+          </div>
+          <div class="grid-3">
+            <div class="tile">
+              <div class="tile-label">Статус</div>
+              <div class="tile-value"><span class="pill success">Active</span></div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Клиент од</div>
+              <div class="tile-value">2014</div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Возраст</div>
+              <div class="tile-value">44 год.</div>
+            </div>
+          </div>
+          <div class="next-action">
+            <span class="glyph">→</span>
+            <div class="body">
+              <strong>Следна важна активност</strong>
+              <span>Известување за неплатена премија на полиса ЖП‑20/002910 се испраќа на 15.8.2026, доколку рата од 112,86 ден. остане неплатена.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="policies">
+          <div class="card-head">
+            <h2 class="card-title">2 · Полиси</h2>
+            <span class="card-hint">2 активни · 1 истечена</span>
+          </div>
+          <div class="policy-row">
+            <div>
+              <div class="policy-name">Живот Плус — 20/002910</div>
+              <div class="policy-sub">Покривање: смрт, инвалидитет · Бенефициент: Ана Стојановска (ќерка)</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Премија</div>
+              <div class="policy-col-val">2.712 ден./год.</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Следна уплата</div>
+              <div class="policy-col-val" style="font-size:0.82rem;">1.9.2026</div>
+            </div>
+            <span class="pill success">Активна</span>
+          </div>
+          <div class="policy-row">
+            <div>
+              <div class="policy-name">Рентно осигурување — 20/003144</div>
+              <div class="policy-sub">Покривање: доживување · Бенефициент: сопственик</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Премија</div>
+              <div class="policy-col-val">6.000 ден./год.</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Следна уплата</div>
+              <div class="policy-col-val" style="font-size:0.82rem;">1.12.2026</div>
+            </div>
+            <span class="pill success">Активна</span>
+          </div>
+          <div class="policy-row">
+            <div>
+              <div class="policy-name">Незгода — 18/000765</div>
+              <div class="policy-sub">Покривање: незгода · Истечена без обновување</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Премија</div>
+              <div class="policy-col-val">—</div>
+            </div>
+            <div>
+              <div class="policy-col-label">Истечена</div>
+              <div class="policy-col-val" style="font-size:0.82rem;">3.4.2023</div>
+            </div>
+            <span class="pill neutral">Lapsed</span>
+          </div>
+        </section>
+
+        <section class="card" id="finance">
+          <div class="card-head">
+            <h2 class="card-title">3 · Финансии</h2>
+            <span class="card-hint">Историја на плаќања и салдо</span>
+          </div>
+          <div class="grid-3" style="margin-bottom:16px;">
+            <div class="tile">
+              <div class="tile-label">Вкупно платени премии</div>
+              <div class="tile-value">306.480 ден.</div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Неплатени рати</div>
+              <div class="tile-value" style="color:var(--critical);">112,86 ден.</div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Автоматско плаќање</div>
+              <div class="tile-value"><span class="pill neutral">Исклучено</span></div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Датум</th><th>Полиса</th><th>Опис</th><th class="num">Износ</th><th>Статус</th></tr></thead>
+              <tbody>
+                <tr><td>1.6.2026</td><td>20/002910</td><td>Рата 2/2026</td><td class="num amt-neg">112,86 ден.</td><td><span class="pill warning">Доцни</span></td></tr>
+                <tr><td>1.12.2025</td><td>20/002910</td><td>Рата 1/2025</td><td class="num">112,86 ден.</td><td><span class="pill success">Платена</span></td></tr>
+                <tr><td>1.9.2025</td><td>20/003144</td><td>Годишна премија</td><td class="num">6.000 ден.</td><td><span class="pill success">Платена</span></td></tr>
+                <tr><td>1.6.2025</td><td>20/002910</td><td>Рата 2/2025</td><td class="num">112,86 ден.</td><td><span class="pill success">Платена</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="claims">
+          <div class="card-head">
+            <h2 class="card-title">4 · Штети (Claims)</h2>
+            <span class="card-hint">1 активна · 2 во историја</span>
+          </div>
+          <div class="claim-card">
+            <div class="claim-top">
+              <strong>CLM‑2026‑0417 · Хируршка интервенција</strong>
+              <span class="pill warning">Во тек</span>
+            </div>
+            <div class="claim-meta">Пријавена 22.7.2026 · Бара: наод од болница (недостасува) · Проценет износ 45.000 ден.</div>
+          </div>
+          <div class="claim-card">
+            <div class="claim-top">
+              <strong>CLM‑2023‑1092 · Боледување &gt; 30 дена</strong>
+              <span class="pill success">Исплатена</span>
+            </div>
+            <div class="claim-meta">Затворена 14.2.2023 · Исплатено 18.200 ден.</div>
+          </div>
+        </section>
+
+        <section class="card" id="medical">
+          <div class="card-head">
+            <h2 class="card-title">5 · Medical / Underwriting</h2>
+          </div>
+          <div class="grid-3">
+            <div class="tile">
+              <div class="tile-label">Underwriting статус</div>
+              <div class="tile-value"><span class="pill success">Завршено</span></div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Risk класа</div>
+              <div class="tile-value">Стандард</div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Исклучоци</div>
+              <div class="tile-value" style="font-size:0.82rem;">Претходна состојба — 'рбетен диск (2019)</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="family">
+          <div class="card-head">
+            <h2 class="card-title">6 · Семејство</h2>
+          </div>
+          <div class="family-list">
+            <div class="family-member">
+              <div class="family-avatar">ИС</div>
+              <div><div class="family-name">Игор Стојановски</div><div class="family-role">Сопружник · без активна полиса</div></div>
+            </div>
+            <div class="family-member">
+              <div class="family-avatar">АС</div>
+              <div><div class="family-name">Ана Стојановска</div><div class="family-role">Ќерка, 16 год. · бенефициент на 20/002910</div></div>
+            </div>
+            <div class="family-member">
+              <div class="family-avatar">ВС</div>
+              <div><div class="family-name">Вук Стојановски</div><div class="family-role">Син, 11 год.</div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="sales">
+          <div class="card-head">
+            <h2 class="card-title">7 · Продажба</h2>
+          </div>
+          <div class="grid-2" style="margin-bottom: 12px;">
+            <div class="tile">
+              <div class="tile-label">Агент</div>
+              <div class="tile-value" style="font-size:0.92rem;">Билјана Ефтимова</div>
+            </div>
+            <div class="tile">
+              <div class="tile-label">Последна понуда</div>
+              <div class="tile-value" style="font-size:0.92rem;">14.3.2026 · Ренто плус</div>
+            </div>
+          </div>
+          <div class="opp">
+            <span>Дополнително здравствено осигурување за децата</span>
+            <span class="pill neutral">Отворена можност</span>
+          </div>
+          <div class="opp">
+            <span>Cross‑sell: Каско — сопружник има регистрирано возило</span>
+            <span class="pill neutral">Препорака</span>
+          </div>
+        </section>
+
+        <section class="card" id="comms">
+          <div class="card-head">
+            <h2 class="card-title">8 · Communication Timeline</h2>
+          </div>
+          <div class="timeline">
+            <div class="tl-item">
+              <div class="tl-dot">✉</div>
+              <div class="tl-head"><strong>Известување за неплатена премија испратено</strong><span class="tl-when">3.8.2026</span></div>
+              <div class="tl-body">PDF автоматски генериран и испратен на maju6kabt@hotmail.com</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot">☎</div>
+              <div class="tl-head"><strong>Појдовен повик — потврда на адреса</strong><span class="tl-when">28.7.2026</span></div>
+              <div class="tl-body">Разговарано со клиентка, 4 мин.</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot">📄</div>
+              <div class="tl-head"><strong>Испратен анекс на полиса 20/003144</strong><span class="tl-when">14.3.2026</span></div>
+              <div class="tl-body">Потпишан и вратен на 16.3.2026</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot">!</div>
+              <div class="tl-head"><strong>Жалба — доцнење на исплата на штета</strong><span class="tl-when">9.1.2023</span></div>
+              <div class="tl-body">Решена на 20.1.2023, исплата извршена</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" id="documents">
+          <div class="card-head">
+            <h2 class="card-title">9 · Документи</h2>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon">PDF</div>
+            <div><div class="doc-name">Полиса 20/002910</div><div class="doc-meta">Издадена 4.1.2014</div></div>
+            <span class="pill neutral">Потпишан</span>
+            <span class="card-hint">218 KB</span>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon">PDF</div>
+            <div><div class="doc-name">Анекс 3 — 20/003144</div><div class="doc-meta">14.3.2026</div></div>
+            <span class="pill success">Потпишан</span>
+            <span class="card-hint">96 KB</span>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon">JPG</div>
+            <div><div class="doc-name">Лична карта — скен</div><div class="doc-meta">4.1.2014</div></div>
+            <span class="pill neutral">Архивирано</span>
+            <span class="card-hint">1,4 MB</span>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon">PDF</div>
+            <div><div class="doc-name">Наод од болница — CLM‑2026‑0417</div><div class="doc-meta">Побаран 22.7.2026</div></div>
+            <span class="pill critical">Недостасува</span>
+            <span class="card-hint">—</span>
+          </div>
+        </section>
+
+        <section class="card" id="ai">
+          <div class="card-head">
+            <h2 class="card-title">10 · AI Insights</h2>
+            <span class="card-hint">Генерирано автоматски врз база на активност</span>
+          </div>
+          <div class="grid-2">
+            <div class="ai-card">
+              <div class="ai-head"><span class="tag">Churn Risk</span></div>
+              <div class="ai-figure">14%</div>
+              <div class="meter risk-low"><i style="width:14%;"></i></div>
+              <span class="card-hint">Низок ризик — редовна историја на плаќање, освен тековна доцна рата</span>
+            </div>
+            <div class="ai-card">
+              <div class="ai-head"><span class="tag">Next Best Action</span></div>
+              <div class="tile-value" style="font-size:0.92rem;">Понуди здравствено покривање за децата</div>
+              <span class="card-hint">Базирано на возраст на децата и постоечки семеен профил</span>
+            </div>
+            <div class="ai-card">
+              <div class="ai-head"><span class="tag">Недостигаат документи</span></div>
+              <div class="tile-value" style="font-size:0.92rem; color:var(--critical);">1 документ</div>
+              <span class="card-hint">Наод од болница за CLM‑2026‑0417 — блокира исплата</span>
+            </div>
+            <div class="ai-card">
+              <div class="ai-head"><span class="tag">Потсетник за обновување</span></div>
+              <div class="tile-value" style="font-size:0.92rem;">Незгода 18/000765</div>
+              <span class="card-hint">Истечена 3.4.2023 — предложи обновување при следен контакт</span>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <footer class="spec-note">Пример со илустративни податоци — за прикажување на распоред и содржина на екранот, не претставува реален клиент.</footer>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.subnav a'));
+    var sections = links.map(function (l) { return document.querySelector(l.getAttribute('href')); });
+    function onScroll() {
+      var pos = window.scrollY + 140;
+      var activeIdx = 0;
+      sections.forEach(function (s, i) { if (s && s.offsetTop <= pos) activeIdx = i; });
+      links.forEach(function (l, i) { l.classList.toggle('active', i === activeIdx); });
+    }
+    document.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>

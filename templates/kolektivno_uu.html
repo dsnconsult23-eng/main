@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Затворање на фактури со салдо нула{% endblock %}
+
+{% block content %}
+<div class="page-title">Затворање на фактури со салдо нула</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if results %}
+  {% for res in results %}
+    {% if res.code == 1 %}
+    <div class="alert alert-success" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:.5rem;">
+      <span>✅ <strong>{{ res.polisa }}</strong> — {{ res.msg }}{% if res.knizi_msg %} | {{ res.knizi_msg }}{% endif %}</span>
+      {% if res.uu_broj %}
+      <a href="/siglife-report/kolektivno-uu/excel?polisa_broj={{ res.polisa }}&uu_broj={{ res.uu_broj }}&datum_uu={{ today_str }}"
+         class="btn btn-secondary" style="font-size:.82rem; padding:.3rem .8rem; white-space:nowrap;">
+        ⬇ Excel
+      </a>
+      {% endif %}
+    </div>
+    {% if res.knizi_warn %}
+    <div class="alert alert-warning" style="margin-bottom:.5rem;">⚠ {{ res.knizi_warn }}</div>
+    {% endif %}
+    {% else %}
+    <div class="alert alert-error" style="margin-bottom:.5rem;">❌ <strong>{{ res.polisa }}</strong> — {{ res.msg }}</div>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{# ── Filter form ── #}
+<div class="card" style="margin-bottom:1.25rem;">
+  <form method="get" action="/siglife-report/kolektivno-uu">
+    <input type="hidden" name="searched" value="1">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.75rem 1rem; align-items:end;">
+      <div class="form-group" style="margin:0">
+        <label>Клиент</label>
+        <input type="text" name="klient" value="{{ f_klient or '' }}" placeholder="Дел од назив...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Број на полиса</label>
+        <input type="text" name="polisa_broj" value="{{ f_polisa_broj or '' }}" placeholder="пр. 19/000123">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Тип (префикс)</label>
+        <input type="text" name="tip_polisa" value="{{ f_tip_polisa or '' }}" placeholder="пр. 19, 26, 28...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум фактура од</label>
+        <input type="date" name="datum_od" value="{{ f_datum_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум фактура до</label>
+        <input type="date" name="datum_do" value="{{ f_datum_do or '' }}">
+      </div>
+      <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:.4rem; margin:0; font-size:.88rem; font-weight:600; text-transform:none; letter-spacing:0; color:#34495e; cursor:pointer;">
+          <input type="checkbox" name="dospeana" value="1" {% if f_dospeana %}checked{% endif %}
+                 style="width:auto; margin:0; cursor:pointer;">
+          Доспеана ненаплатена премија
+        </label>
+        <button type="submit" class="btn btn-primary">🔎 Прегледај</button>
+        <a href="/siglife-report/kolektivno-uu" class="btn btn-secondary">✕ Исчисти</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if searched and not rows and not error %}
+<div class="alert alert-info">Нема резултати за зададените филтри.</div>
+{% endif %}
+
+{# ── DOSPEANA mode: policy-grouped report (read-only) ── #}
+{% if rows and f_dospeana %}
+<div class="card" style="padding:0; overflow-x:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Полиса</th>
+        <th>Клиент</th>
+        <th style="text-align:right">Бр. анекси</th>
+        <th style="text-align:right">Неплатено</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><strong>{{ r.polisa_broj }}</strong></td>
+        <td>{{ r.ime_prezime }}</td>
+        <td style="text-align:right">{{ r.br_aneksi }}</td>
+        <td style="text-align:right; color:#c0392b; font-weight:600">{{ "%.2f"|format(r.vk_pozitivno) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── DEFAULT mode: grouped by faktura with checkboxes ── #}
+{% if grouped and not f_dospeana %}
+<form method="post" action="/siglife-report/kolektivno-uu/zatvorit-selected">
+  <input type="hidden" name="tip_polisa"    value="{{ f_tip_polisa or '' }}">
+  <input type="hidden" name="klient"        value="{{ f_klient or '' }}">
+  <input type="hidden" name="f_polisa_broj" value="{{ f_polisa_broj or '' }}">
+  <input type="hidden" name="datum_od"      value="{{ f_datum_od or '' }}">
+  <input type="hidden" name="datum_do"      value="{{ f_datum_do or '' }}">
+
+  <div class="card" style="padding:.85rem 1rem; margin-bottom:.75rem; display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+    <label style="font-size:.82rem; font-weight:700; color:#5d6d7e; text-transform:uppercase; letter-spacing:.4px; margin:0;">Датум на УУ извод:</label>
+    <input type="date" name="datum_uu" value="{{ today_str }}" style="width:auto; padding:.35rem .6rem;">
+    <button type="submit" class="btn btn-primary" onclick="return confirmZatvorit()" style="padding:.4rem 1rem;">
+      ✔ Затвори избрани
+    </button>
+    <button type="button" class="btn btn-secondary" onclick="selAll(true)"  style="padding:.4rem .8rem; font-size:.82rem;">☑ Сите</button>
+    <button type="button" class="btn btn-secondary" onclick="selAll(false)" style="padding:.4rem .8rem; font-size:.82rem;">☐ Откажи</button>
+    <span id="selCount" style="font-size:.82rem; color:#5d6d7e;"></span>
+  </div>
+
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px; text-align:center">
+            <input type="checkbox" id="sel-all-cb" title="Избери сите / Откажи"
+                   style="width:auto; margin:0; cursor:pointer;">
+          </th>
+          <th>Полиса</th>
+          <th>Клиент</th>
+          <th>Фактура</th>
+          <th>Датум фактура</th>
+          <th style="text-align:right">Износ</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% set ns = namespace(prev_polisa='') %}
+      {% for grp in grouped %}
+        {% if grp.polisa_broj != ns.prev_polisa %}
+          {% if not loop.first %}
+          <tr style="height:6px; background:#dde6f0;"><td colspan="6"></td></tr>
+          {% endif %}
+          {% set ns.prev_polisa = grp.polisa_broj %}
+        {% endif %}
+        {# Faktura group header row #}
+        <tr style="background:#eaf4fb; border-left:3px solid #2980b9;">
+          <td colspan="3" style="padding:.35rem 1rem; font-size:.83rem; font-weight:700; color:#1a3a5c;">
+            📄 {{ grp.faktura_broj }} &nbsp;·&nbsp; {{ grp.ime_prezime }}
+          </td>
+          <td colspan="2"></td>
+          <td style="text-align:right; font-weight:700; color:#27ae60; padding:.35rem 1rem;">= 0.00</td>
+        </tr>
+        {# Individual invoice rows #}
+        {% for r in grp.stavki %}
+        <tr>
+          <td style="text-align:center;">
+            <input type="checkbox" name="sel_invoices"
+                   value="{{ r.os_aneks_fakturaid }}|{{ r.polisa_broj }}"
+                   class="sel-cb"
+                   style="width:auto; margin:0; cursor:pointer;"
+                   onchange="updateCount()">
+          </td>
+          <td><strong>{{ r.polisa_broj }}</strong></td>
+          <td>{{ r.ime_prezime }}</td>
+          <td style="font-family:monospace; font-size:.83rem;">{{ r.faktura_broj }}</td>
+          <td>
+            {% if r.data_faktura %}
+              {% if r.data_faktura is string %}
+                {{ r.data_faktura[8:10] }}.{{ r.data_faktura[5:7] }}.{{ r.data_faktura[:4] }}
+              {% else %}{{ r.data_faktura.strftime('%d.%m.%Y') }}{% endif %}
+            {% endif %}
+          </td>
+          <td style="text-align:right; font-weight:600;
+                     color:{% if r.iznos > 0 %}#27ae60{% elif r.iznos < 0 %}#c0392b{% else %}#7f8c8d{% endif %}">
+            {{ "%.2f"|format(r.iznos) }}
+          </td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% endif %}
+
+<script>
+function selAll(checked) {
+  var cbs = document.querySelectorAll('.sel-cb');
+  for (var i = 0; i < cbs.length; i++) { cbs[i].checked = checked; }
+  var master = document.getElementById('sel-all-cb');
+  if (master) master.checked = checked;
+  updateCount();
+}
+function updateCount() {
+  var cbs   = document.querySelectorAll('.sel-cb');
+  var n     = document.querySelectorAll('.sel-cb:checked').length;
+  var el    = document.getElementById('selCount');
+  if (el) el.textContent = n > 0 ? ('Избрани: ' + n + ' ставки') : '';
+  var master = document.getElementById('sel-all-cb');
+  if (master) master.checked = (n > 0 && n === cbs.length);
+  if (master) master.indeterminate = (n > 0 && n < cbs.length);
+}
+var masterCb = document.getElementById('sel-all-cb');
+if (masterCb) {
+  masterCb.addEventListener('change', function() { selAll(this.checked); });
+}
+function confirmZatvorit() {
+  var n = document.querySelectorAll('.sel-cb:checked').length;
+  if (n === 0) { alert('Не е избрана ниедна ставка.'); return false; }
+  var polise = {};
+  document.querySelectorAll('.sel-cb:checked').forEach(function(cb) {
+    var parts = cb.value.split('|');
+    if (parts.length === 2) polise[parts[1]] = true;
+  });
+  var np = Object.keys(polise).length;
+  return confirm('Да се затворат ' + n + ' ставки од ' + np + ' полиси со УУ извод?');
+}
+updateCount();
+</script>
+{% endblock %}

@@ -25,12 +25,15 @@ PATHS_TO_DEPLOY=(
     main.py
     db_ifx.py
     requrements.txt
+    SendMailAgent.py
+    InkasoProvizijaBroker.py
     routers
     templates
     auth
     Utils
     services
     static
+    data
 )
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -57,6 +60,9 @@ tar \
     --exclude=".git" \
     -czf - "${PATHS_TO_DEPLOY[@]}" \
     | ssh "${REMOTE_USER_HOST}" "tar -xzf - -C '${REMOTE_PATH}'"
+
+echo "==> Инсталирам/ажурирам Python зависности на серверот ..."
+ssh "${REMOTE_USER_HOST}" "cd '${REMOTE_PATH}' && pip3 install -r requrements.txt"
 
 echo "==> Рестартирам ${SERVICE_NAME} на серверот ..."
 ssh "${REMOTE_USER_HOST}" "systemctl restart ${SERVICE_NAME} && systemctl is-active ${SERVICE_NAME}"

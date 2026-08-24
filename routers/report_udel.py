@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request, Form, Query, Depends
+from fastapi import APIRouter, Request, Form, Query, Depends, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from io import BytesIO
@@ -8,8 +9,14 @@ from datetime import datetime, date
 import os
 
 from db_ifx import informix_cursor
+from routers import Connection
+from auth.role_utils import has_any_role
 import re
 import unicodedata
+from typing import List
+
+
+_UDEL_LOG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "promena_udeli_log.txt")
 
 
 router = APIRouter()
@@ -26,6 +33,8 @@ def get_current_user(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    if not has_any_role(user, "report_udel"):
+        raise HTTPException(status_code=403, detail="Access denied")
     return user
 
 # ---------------------------
@@ -40,9 +49,280 @@ async def report_udel_page(request: Request, user=Depends(get_current_user)):
             "user": user,
             "active": "ReportUdel",
             "selected_date": date.today().isoformat(),  # default date in input
-            "dogovoruvac": ""
+            "dogovoruvac": "",
         }
     )
+
+
+@router.get("/PromenaUdeli")
+async def promena_udeli_page(request: Request, user=Depends(get_current_user)):
+    return _render_udeli(request, user, "")
+
+
+def _user_name(user) -> str:
+    return str(user.get("username") or user.get("name") or user.get("id") or "unknown")
+
+
+def _fetch_udeli_za_promena(polisa_broj: str):
+    sql = """
+        SELECT
+            u.ROWID AS udel_rowid,
+            TRIM(u.polisa_broj) AS polisa_broj,
+            TRIM(vrati_ponuda_broj(u.os_ponudaid)) AS ponuda_broj,
+            TRIM(f.invest_fond) AS invest_fond,
+            NVL(u.premija_invest, 0) AS premija_invest,
+            NVL(u.br_udel, 0) AS br_udel,
+            u.par_clientid,
+            TRIM(vrati_client_name(u.par_clientid)) AS client_name,
+            CASE
+                WHEN NVL(u.premija_invest, 0) < 0 THEN 'Купување'
+                WHEN u.par_clientid = 80 THEN 'Продавање'
+                ELSE 'Купување'
+            END AS transakcija,
+            CASE
+                WHEN NVL(u.br_udel, 0) = 0 THEN 0
+                ELSE ABS(NVL(u.premija_invest, 0) / u.br_udel)
+            END AS cena_udel
+        FROM os_udel_kupi u
+        LEFT JOIN os_produkt_invest_fond f
+          ON f.os_produkt_invest_fondid = u.os_produkt_invest_fondid
+        WHERE UPPER(TRIM(u.polisa_broj)) = UPPER(?)
+        ORDER BY u.ROWID
+    """
+    with informix_cursor() as cursor:
+        cursor.execute(sql, [polisa_broj.strip()])
+        raw = cursor.fetchall()
+    return [
+        {
+            "os_udel_kupiid": int(r[0]),
+            "polisa_broj": r[1] or "",
+            "ponuda_broj": r[2] or "",
+            "invest_fond": r[3] or "",
+            "premija_invest": float(r[4] or 0),
+            "br_udel": float(r[5] or 0),
+            "par_clientid": r[6],
+            "client_name": r[7] or "",
+            "transakcija": r[8] or "",
+            "cena_udel": float(r[9] or 0),
+        }
+        for r in raw
+    ]
+
+
+def _render_udeli(request, user, polisa_broj, rows=None, error=None, success=None):
+    return templates.TemplateResponse("promena_udeli.html", {
+        "request": request,
+        "user": user,
+        "active": "PromenaUdeli",
+        "udel_polisa": polisa_broj,
+        "udel_rows": rows or [],
+        "udel_error": error,
+        "udel_success": success,
+    })
+
+
+def _mutate_udel(os_udel_kupiid: int, user_name: str, nov_br_udeli=None, delete=False):
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise RuntimeError("Нема конекција со базата.")
+    try:
+        cursor.execute(
+            "SELECT TRIM(polisa_broj), NVL(premija_invest,0), NVL(br_udel,0) "
+            "FROM os_udel_kupi WHERE ROWID = ?",
+            [os_udel_kupiid],
+        )
+        before = cursor.fetchone()
+        if not before:
+            raise RuntimeError("Записот за удел не е пронајден.")
+        polisa_broj = before[0]
+        stara_premija = float(before[1] or 0)
+        star_br_udeli = float(before[2] or 0)
+
+        if delete:
+            cursor.execute("DELETE FROM os_udel_kupi WHERE ROWID = ?", [os_udel_kupiid])
+            action = f"ИЗБРИШАН premija_invest={stara_premija} br_udel={star_br_udeli}"
+        else:
+            cursor.execute(
+                "UPDATE os_udel_kupi SET br_udel = ?, version = NVL(version,0) + 1 "
+                "WHERE ROWID = ?",
+                [float(nov_br_udeli), os_udel_kupiid],
+            )
+            action = f"ПРОМЕНЕТ br_udel: {star_br_udeli} -> {float(nov_br_udeli)}"
+        conn.commit()
+        with open(_UDEL_LOG_FILE, "a", encoding="utf-8") as log:
+            log.write(
+                f"[{datetime.now().isoformat(timespec='seconds')}] user={user_name} "
+                f"os_udel_kupiid={os_udel_kupiid} polisa={polisa_broj} {action}\n"
+            )
+        return polisa_broj
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+
+class UdelBulkUpdate(BaseModel):
+    ids: List[int] = Field(..., min_length=1, max_length=1000)
+    nov_br_udeli: float
+
+
+class UdelBulkDelete(BaseModel):
+    ids: List[int] = Field(..., min_length=1, max_length=1000)
+
+
+def _mutate_udeli_bulk(ids, user_name: str, nov_br_udeli=None, delete=False):
+    ids = list(dict.fromkeys(int(value) for value in ids))
+    if not ids:
+        raise RuntimeError("Не се избрани записи.")
+
+    conn, cursor, ok = Connection.OSISinitConn()
+    if not ok or conn is None:
+        raise RuntimeError("Нема конекција со базата.")
+    audit_rows = []
+    try:
+        jconn = getattr(conn, "jconn", None)
+        if jconn is not None:
+            jconn.setAutoCommit(False)
+
+        placeholders = ",".join(["?"] * len(ids))
+        cursor.execute(
+            f"SELECT ROWID, TRIM(polisa_broj), NVL(premija_invest,0), NVL(br_udel,0) "
+            f"FROM os_udel_kupi WHERE ROWID IN ({placeholders})",
+            ids,
+        )
+        found = {int(row[0]): row for row in cursor.fetchall()}
+        missing = [value for value in ids if value not in found]
+        if missing:
+            raise RuntimeError(f"Не се пронајдени записи: {', '.join(map(str, missing))}.")
+
+        for record_id in ids:
+            before = found[record_id]
+            if delete:
+                cursor.execute("DELETE FROM os_udel_kupi WHERE ROWID = ?", [record_id])
+                action = f"ИЗБРИШАН premija_invest={float(before[2] or 0)} br_udel={float(before[3] or 0)}"
+            else:
+                cursor.execute(
+                    "UPDATE os_udel_kupi SET br_udel = ?, version = NVL(version,0) + 1 "
+                    "WHERE ROWID = ?",
+                    [float(nov_br_udeli), record_id],
+                )
+                action = f"ПРОМЕНЕТ br_udel: {float(before[3] or 0)} -> {float(nov_br_udeli)}"
+            if cursor.rowcount == 0:
+                raise RuntimeError(f"Записот {record_id} не е обработен.")
+            audit_rows.append((record_id, before[1], action))
+
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            cursor.close()
+        finally:
+            conn.close()
+
+    with open(_UDEL_LOG_FILE, "a", encoding="utf-8") as log:
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        for record_id, polisa_broj, action in audit_rows:
+            log.write(
+                f"[{timestamp}] user={user_name} os_udel_kupiid={record_id} "
+                f"polisa={polisa_broj} {action}\n"
+            )
+    return len(audit_rows)
+
+
+@router.post("/ReportUdel/search", include_in_schema=False)
+@router.post("/PromenaUdeli/search")
+async def report_udel_search(request: Request, polisa_broj: str = Form(...)):
+    user = get_current_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    polisa_broj = polisa_broj.strip()
+    if not polisa_broj:
+        return _render_udeli(request, user, polisa_broj, error="Внесете број на полиса.")
+    try:
+        rows = _fetch_udeli_za_promena(polisa_broj)
+        error = None if rows else "Нема записи за удели за внесената полиса."
+    except Exception as exc:
+        rows, error = [], str(exc)
+    return _render_udeli(request, user, polisa_broj, rows=rows, error=error)
+
+
+@router.post("/ReportUdel/update", include_in_schema=False)
+@router.post("/PromenaUdeli/update")
+async def report_udel_update(
+    request: Request,
+    os_udel_kupiid: int = Form(...),
+    polisa_broj: str = Form(...),
+    nov_br_udeli: float = Form(...),
+):
+    user = get_current_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    try:
+        _mutate_udel(os_udel_kupiid, _user_name(user), nov_br_udeli=nov_br_udeli)
+        rows = _fetch_udeli_za_promena(polisa_broj)
+        return _render_udeli(request, user, polisa_broj, rows=rows, success="Бројот на удели е успешно променет.")
+    except Exception as exc:
+        rows = _fetch_udeli_za_promena(polisa_broj)
+        return _render_udeli(request, user, polisa_broj, rows=rows, error=str(exc))
+
+
+@router.post("/ReportUdel/delete", include_in_schema=False)
+@router.post("/PromenaUdeli/delete")
+async def report_udel_delete(
+    request: Request,
+    os_udel_kupiid: int = Form(...),
+    polisa_broj: str = Form(...),
+):
+    user = get_current_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    try:
+        _mutate_udel(os_udel_kupiid, _user_name(user), delete=True)
+        rows = _fetch_udeli_za_promena(polisa_broj)
+        return _render_udeli(request, user, polisa_broj, rows=rows, success="Записот е успешно избришан.")
+    except Exception as exc:
+        rows = _fetch_udeli_za_promena(polisa_broj)
+        return _render_udeli(request, user, polisa_broj, rows=rows, error=str(exc))
+
+
+@router.put("/PromenaUdeli/bulk-update")
+async def promena_udeli_bulk_update(request: Request, payload: UdelBulkUpdate):
+    user = get_current_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    try:
+        count = _mutate_udeli_bulk(
+            payload.ids, _user_name(user), nov_br_udeli=payload.nov_br_udeli
+        )
+        return {"success": True, "message": f"Успешно се променети {count} записи."}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/PromenaUdeli/bulk-delete")
+async def promena_udeli_bulk_delete(request: Request, payload: UdelBulkDelete):
+    user = get_current_user(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    try:
+        count = _mutate_udeli_bulk(payload.ids, _user_name(user), delete=True)
+        return {"success": True, "message": f"Успешно се избришани {count} записи."}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 def safe_ascii_filename(name: str) -> str:
     # Convert to closest ASCII (drops unsupported chars)
     name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
@@ -68,6 +348,8 @@ async def export_report_udel(
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    if not has_any_role(user, "report_udel"):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Prefer POST form values when present
     export_date = export_date_form or export_date

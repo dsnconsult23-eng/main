@@ -5,6 +5,19 @@
 {% block content %}
 <h1>📢 Известувања</h1>
 
+<div style="margin: 1rem 0 1.25rem 0; padding: 0.85rem 1rem; border: 1px solid #ddd; border-radius: 10px; background: #fafafa;">
+  <div style="font-weight:700; margin-bottom:0.5rem;">Тип</div>
+  <label style="margin-right:1.25rem;">
+    <input type="radio" name="izvestuvanja_mode" value="izvestuvanja" onchange="toggleIzvestuvanjaMode()">
+    Праќање на маил за информации
+  </label>
+  <label>
+    <input type="radio" name="izvestuvanja_mode" value="opomeni" checked onchange="toggleIzvestuvanjaMode()">
+    Известувања/Опомени за должна премија (PDF) и испраќање по маил
+  </label>
+</div>
+
+<div id="izvestuvanjaSection">
 <form id="notifForm"
       method="post"
       action="/siglife-report/izvestuvanja"
@@ -63,16 +76,30 @@
   </p>
 
 </form>
+</div>
 
 <hr style="margin: 2rem 0;">
 
-<h2>📄 Опомени (PDF)</h2>
+<div id="opomeniSection">
+<h2 id="opomeniDocTitle">📄 Опомени (PDF)</h2>
 
 <form id="opomeniForm"
       method="post"
       action="/siglife-report/opomeni"
       style="margin-top: 1rem;"
       enctype="multipart/form-data">
+
+  <div style="margin: 0.5rem 0 1rem 0; padding: 0.75rem 0.9rem; border: 1px solid #ddd; border-radius: 10px; background: #fafafa;">
+    <div style="font-weight:700; margin-bottom:0.45rem;">Тип на документ</div>
+    <label style="margin-right:1.25rem;">
+      <input type="radio" name="opomeni_document_type" value="izvestuvanja" onchange="toggleOpomeniDocumentType()">
+      Известувања
+    </label>
+    <label>
+      <input type="radio" name="opomeni_document_type" value="opomeni" checked onchange="toggleOpomeniDocumentType()">
+      Опомени
+    </label>
+  </div>
 
   <!-- TARGET TYPE -->
   <label for="op_target_type">Тип клиенти:</label>
@@ -89,7 +116,7 @@
            name="policy_no"
            id="policy_no"
            value="{{ policy_no|default('') }}"
-           placeholder="пр. S0197690"
+           placeholder="пр. 19/ или цел број на полиса"
            style="width: 320px;">
   </div>
 
@@ -134,6 +161,15 @@
          style="width: 320px;">
   </div>
 
+  <div style="margin-top:0.75rem;">
+    <label for="mail_status_filter">Mail статус:</label>
+    <select name="mail_status_filter" id="mail_status_filter" style="width: 220px;">
+      <option value="all">Сите</option>
+      <option value="without_mail">Само без mail</option>
+      <option value="with_mail">Само со mail</option>
+    </select>
+  </div>
+
   <hr style="margin: 1rem 0;">
 
   <div style="margin-top: 0.75rem;">
@@ -149,16 +185,37 @@
     ] %}
 
     {% for code, label in channels %}
-      <label style="display:flex; align-items:center; gap:0.5rem; margin:0.2rem 0;">
+      <div style="display:flex; align-items:center; gap:0.5rem; margin:0.2rem 0; padding:0.45rem 0.6rem; background:#f2f2f2; border:1px solid #d9d9d9; border-radius:8px;">
         <input
           type="checkbox"
           name="sales_channels"
           value="{{ code }}"
           {% if sales_channels and code in sales_channels %}checked{% endif %}
         >
-        {{ label }}
-      </label>
+        <span>{{ label }}</span>
+      </div>
     {% endfor %}
+  </div>
+
+  <div style="margin-top: 0.75rem;">
+    <div style="font-weight:700; margin-bottom:0.35rem;">Тип на полиса</div>
+
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
+      <button type="button" onclick="toggleAllPolicyTypes(true)">Селектирај ги сите</button>
+      <button type="button" onclick="toggleAllPolicyTypes(false)">Одселектирај ги сите</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(90px, 1fr)); gap:0.4rem;">
+      {% for code in policy_type_options %}
+        <label style="display:flex; align-items:center; gap:0.45rem; padding:0.45rem 0.6rem; background:#f2f2f2; border:1px solid #d9d9d9; border-radius:8px;">
+          <input type="checkbox" name="policy_types" value="{{ code }}">
+          <span>{{ code }}/</span>
+        </label>
+      {% endfor %}
+    </div>
+    <div style="font-size:0.9rem; color:#555; margin-top:0.35rem;">
+      Ако не е означен тип, се земаат сите полиси.
+    </div>
   </div>
 
   <!-- FORMAT fixed to PDF -->
@@ -184,6 +241,17 @@
     </button>
   </div>
 
+  <div style="margin-top:0.75rem; display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <label for="sent_date_from">Mail испратен од:</label><br>
+      <input type="date" id="sent_date_from">
+    </div>
+    <div>
+      <label for="sent_date_to">Mail испратен до:</label><br>
+      <input type="date" id="sent_date_to">
+    </div>
+  </div>
+
   <!-- STATUS -->
   <p id="op_statusBox" style="margin-top: 1rem;">
     {% if op_message %}
@@ -192,6 +260,7 @@
   </p>
 
 </form>
+</div>
 
 <!-- GENERATED ITEMS LIST -->
 <div id="generatedListWrap"
@@ -205,6 +274,8 @@
         <input type="checkbox" id="selectAllGenerated" onchange="toggleSelectAllGenerated(this)">
         Селектирај сите
       </label>
+
+      <span id="selectedCount" style="font-weight:bold;">0 селектирани</span>
 
       <button type="button" id="sendSelectedBtn" onclick="sendSelectedGeneratedByMail()">
         📧 Испрати селектирани по mail
@@ -224,6 +295,7 @@
           <th style="border:1px solid #ddd; padding:8px; text-align:left;">Клиент</th>
           <th style="border:1px solid #ddd; padding:8px; text-align:left;">Полиса</th>
           <th style="border:1px solid #ddd; padding:8px; text-align:left;">Email</th>
+          <th style="border:1px solid #ddd; padding:8px; text-align:left;">Последна испратена</th>
           <th style="border:1px solid #ddd; padding:8px; text-align:left;">PDF</th>
           <th style="border:1px solid #ddd; padding:8px; text-align:left;">Статус</th>
         </tr>
@@ -297,6 +369,55 @@ const TEMPLATE_LEGAL = `Почитувани,
 function setButtonState(id, disabled) {
   const btn = document.getElementById(id);
   if (btn) btn.disabled = disabled;
+}
+
+function toggleAllPolicyTypes(checked) {
+  document.querySelectorAll('input[name="policy_types"]').forEach(input => {
+    input.checked = checked;
+  });
+}
+
+function toggleIzvestuvanjaMode() {
+  const selected = document.querySelector('input[name="izvestuvanja_mode"]:checked')?.value || "izvestuvanja";
+  const izvestuvanjaSection = document.getElementById("izvestuvanjaSection");
+  const opomeniSection = document.getElementById("opomeniSection");
+  const generatedWrap = document.getElementById("generatedListWrap");
+
+  if (izvestuvanjaSection) {
+    izvestuvanjaSection.style.display = selected === "izvestuvanja" ? "block" : "none";
+  }
+
+  if (opomeniSection) {
+    opomeniSection.style.display = selected === "opomeni" ? "block" : "none";
+  }
+
+  if (generatedWrap && selected !== "opomeni") {
+    generatedWrap.style.display = "none";
+  }
+}
+
+function toggleOpomeniDocumentType() {
+  const selected = document.querySelector('input[name="opomeni_document_type"]:checked')?.value || "opomeni";
+  const title = document.getElementById("opomeniDocTitle");
+  const genBtn = document.getElementById("genOpomeniBtn");
+  const exportBtn = document.getElementById("exportExcelBtn");
+  const exportSentBtn = document.getElementById("exportSentExcelBtn");
+
+  if (title) {
+    title.innerText = selected === "izvestuvanja" ? "📄 Известувања (PDF)" : "📄 Опомени (PDF)";
+  }
+
+  if (genBtn) {
+    genBtn.innerText = selected === "izvestuvanja" ? "Генерирање на известувања" : "Генерирање на опомени";
+  }
+
+  if (exportBtn) {
+    exportBtn.innerText = selected === "izvestuvanja" ? "📊 Export Генерирани известувања" : "📊 Export Excel";
+  }
+
+  if (exportSentBtn) {
+    exportSentBtn.innerText = selected === "izvestuvanja" ? "📊 Export испратени известувања" : "📊 Export испратени опомени";
+  }
 }
 
 function applyTemplate() {
@@ -557,7 +678,21 @@ function renderGeneratedItems(items) {
     return;
   }
 
-  items.forEach((item) => {
+  const sortedItems = [...items].sort((a, b) => {
+    const groupA = getGeneratedItemSortGroup(a);
+    const groupB = getGeneratedItemSortGroup(b);
+
+    if (groupA !== groupB) return groupA - groupB;
+
+    const policyNumA = getPolicySortNumber(a.policy_no);
+    const policyNumB = getPolicySortNumber(b.policy_no);
+
+    if (policyNumA !== policyNumB) return policyNumA - policyNumB;
+
+    return String(a.policy_no || "").localeCompare(String(b.policy_no || ""));
+  });
+
+  sortedItems.forEach((item) => {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
@@ -571,6 +706,7 @@ function renderGeneratedItems(items) {
       <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.client_name || '')}</td>
       <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.policy_no || '')}</td>
       <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.email || '')}</td>
+      <td style="border:1px solid #ddd; padding:8px;">${escapeHtml(item.last_sent_at || '')}</td>
       <td style="border:1px solid #ddd; padding:8px;">
         ${item.pdf_url ? `<a href="${item.pdf_url}" target="_blank">Преглед</a>` : '-'}
       </td>
@@ -583,11 +719,36 @@ function renderGeneratedItems(items) {
   });
 
   wrap.style.display = "block";
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  const countEl = document.getElementById("selectedCount");
+  if (!countEl) return;
+  countEl.innerText = `${getSelectedGeneratedIds().length} селектирани`;
+}
+
+function getGeneratedItemSortGroup(item) {
+  const email = String(item?.email || "").trim();
+  const address = String(item?.address || "").trim();
+  const city = String(item?.city || "").trim();
+  const fullAddress = `${address} ${city}`.trim();
+
+  if (!email) return 1;
+  if (fullAddress.includes("@") && email) return 3;
+  if (fullAddress && email) return 2;
+  return 4;
+}
+
+function getPolicySortNumber(policyNo) {
+  const digits = String(policyNo || "").replace(/\D/g, "");
+  return digits ? Number(digits) : Number.MAX_SAFE_INTEGER;
 }
 
 function toggleSelectAllGenerated(master) {
   const checks = document.querySelectorAll(".generated-item-check:not(:disabled)");
   checks.forEach(ch => ch.checked = master.checked);
+  updateSelectedCount();
 }
 
 function getSelectedGeneratedIds() {
@@ -631,10 +792,14 @@ async function sendSelectedGeneratedByMail() {
       return;
     }
 
-    statusEl.innerText =
+    let statusMsg =
       "✅ " + data.message +
       " | Испратени: " + data.sent_count +
       " | Неуспешни: " + data.failed_count;
+    if (data.audit_warning) {
+      statusMsg += "\n⚠️ " + data.audit_warning;
+    }
+    statusEl.innerText = statusMsg;
 
     setButtonState("sendSelectedBtn", false);
 
@@ -725,16 +890,27 @@ async function exportOpomeniExcel() {
 
 window.addEventListener("DOMContentLoaded", function () {
   applyTemplate();
+  toggleIzvestuvanjaMode();
+  toggleOpomeniDocumentType();
+
+  const generatedBody = document.getElementById("generatedTableBody");
+  if (generatedBody) {
+    generatedBody.addEventListener("change", function (e) {
+      if (e.target && e.target.classList.contains("generated-item-check")) {
+        updateSelectedCount();
+      }
+    });
+  }
 });
 async function exportSentOpomeniExcel() {
   const statusBox = document.getElementById("op_statusBox");
   setButtonState("exportSentExcelBtn", true);
   statusBox.innerText = "⏳ Подготвувам Excel од испратени mail-ови...";
 
-  const form = document.getElementById("opomeniForm");
   const formData = new FormData();
-  formData.append("date_from", document.getElementById("date_from").value || "");
-  formData.append("date_to", document.getElementById("date_to").value || "");
+  formData.append("sent_date_from", document.getElementById("sent_date_from").value || "");
+  formData.append("sent_date_to", document.getElementById("sent_date_to").value || "");
+  formData.append("target_type", document.getElementById("op_target_type").value || "all");
 
   try {
     const res = await fetch(`${BASE_PATH}/opomeni/export-sent-emails-excel`, {

@@ -21,6 +21,41 @@ from Utils.excel_formatter import format_provision_excel, format_provision_excel
 
 router = APIRouter()
 
+LIFE_VISION_NAME_PARTS = (
+    "LAJF VIZION",
+    "LAJF VISION",
+    "LIFE VISION",
+    "ЛАЈФ ВИЗИОН",
+)
+
+
+def _is_life_vision_name(value: str) -> bool:
+    normalized = " ".join(str(value or "").upper().split())
+    return any(part in normalized for part in LIFE_VISION_NAME_PARTS)
+
+
+def _filter_allowed_brokers(brokers):
+    return [
+        broker_row
+        for broker_row in (brokers or [])
+        if len(broker_row) < 2 or not _is_life_vision_name(broker_row[1])
+    ]
+
+
+def _safe_filename_part(value: str) -> str:
+    safe = str(value or "").strip()
+    for ch in '<>:"/\\|?*':
+        safe = safe.replace(ch, "_")
+    safe = " ".join(safe.split())
+    return safe.strip(" ._") or "broker"
+
+
+def _broker_report_filename(broker_name: str, month: int, year: int, ext: str = "xlsx") -> str:
+    month_part = str(month).zfill(2)
+    broker_part = _safe_filename_part(broker_name)
+    return f"Provizija na brokeri - {broker_part} - {month_part}_{year}.{ext}"
+
+
 def fetch_query(sql):
     conn, cursor, ok = OSISinitConn()
     if not ok or conn is None:
@@ -113,6 +148,7 @@ def send_mail_broker(month: int, year: int):
         and broker<>5288
     """
     brokers, ok = fetch_query(sql_brokers)
+    brokers = _filter_allowed_brokers(brokers)
     if not ok or not brokers:
         return {"success": False, "message": "❌ No brokers found or DB error."}
 
@@ -145,8 +181,18 @@ def send_mail_broker(month: int, year: int):
         # 3️⃣ Create encrypted Excel (replaces msoffcrypto-tool)
         print(f"🔒 Encrypting Excel for {broker_name} with EDB: {edb}")
         print(f"🔒 Creating encrypted ZIP for {broker_name}")
-        zip_io = create_encrypted_zip(df, password=str(edb),mesec=month,godina=year)
-        send_email_with_zip(broker_name, zip_io, filename=f"provizija_{month}_{year}.zip")
+        zip_io = create_encrypted_zip(
+            df,
+            password=str(edb),
+            mesec=month,
+            godina=year,
+            filename=_broker_report_filename(broker_name, month, year, "xlsx")
+        )
+        send_email_with_zip(
+            broker_name,
+            zip_io,
+            filename=_broker_report_filename(broker_name, month, year, "zip")
+        )
 
     cursor.close()
     conn.close()
@@ -413,6 +459,7 @@ def send_mail_broker(month: int, year: int, brokercode: Optional[str] = None):
     if brokercode:
         sql_brokers += f" AND broker = '{brokercode}'"
     brokers, ok = fetch_query(sql_brokers)
+    brokers = _filter_allowed_brokers(brokers)
     if not ok or not brokers:
         return {"success": False, "message": "❌ No brokers found or DB error."}
 
@@ -456,14 +503,19 @@ def send_mail_broker(month: int, year: int, brokercode: Optional[str] = None):
             print(f"🔒 Creating encrypted ZIP for {broker_name}")
             broker_name_clean = broker_name.replace(" ", "_").replace("/", "_").strip()
             edb_str = str(edb).strip()
-            zip_io = create_encrypted_zip_broker(df, password=edb_str, filename=f"provizija_{month}_{year}_{broker}.xlsx")
+            zip_io = create_encrypted_zip_broker(
+                df,
+                password=edb_str,
+                filename=_broker_report_filename(broker_name, month, year, "xlsx"),
+                kurs=vrati_kurs(month, year)
+            )
 
         else:
             sql = f"""
             SELECT broker_name, polisabroj, ponuda_broj,dogovoruvac,dogovoruvac_edb,dogovoruvac_adresa,
             dogovoruvac_grad,osigurenik, klasa,br_rati,rata,
             TO_CHAR(datum_napl, '%d/%m/%Y') as datum_napl,
-            TO_CHAR(datum_zadol, '%d/%m/%Y') as datum_zadol,TO_CHAR(datum_valuta, '%d/%m/%Y') as datum_valuta,koja_godina,osig_suma,premija_zivot,vkupna_premija,provizija_proc,prov_rata,
+            TO_CHAR(datum_zadol, '%d/%m/%Y') as datum_zadol,TO_CHAR(datum_valuta, '%d/%m/%Y') as datum_valuta,koja_godina,osig_suma,premija_zivot,vkupna_premija,provizija_proc,iznos_provizija AS prov_rata,
             premija_nezgoda, prov_rata_nezgoda,naplata,naplata_den,aneks, TO_CHAR(skadenca_datum_od, '%d/%m/%Y') as skadenca_datum_od
             , period_osig, TO_CHAR(skadenca_datum_do, '%d/%m/%Y') as skadenca_datum_do
                 FROM vesna.provizija_client
@@ -498,10 +550,22 @@ def send_mail_broker(month: int, year: int, brokercode: Optional[str] = None):
             print(f"🔒 Creating encrypted ZIP for {broker_name}")
             broker_name_clean = broker_name.replace(" ", "_").replace("/", "_").strip()
             edb_str = str(edb).strip()
-            zip_io = create_encrypted_zip(df, password=edb_str,mesec=month, godina=year, filename=f"provizija_{month}_{year}_{broker}.xlsx")
+            zip_io = create_encrypted_zip(
+                df,
+                password=edb_str,
+                mesec=month,
+                godina=year,
+                filename=_broker_report_filename(broker_name, month, year, "xlsx")
+            )
 
-        send_email_with_zip(broker_name, zip_io, filename=f"provizija_{month}_{year}_{broker}.zip",recipient_email="mirjana.mihajlovska@sigal.com.mk", mesec=month,godina=year)
-        #send_email_with_zip(broker_name, zip_io, filename=f"provizija_{month}_{year}_{broker}.zip",recipient_email="snakevska@gmail.com", mesec=month,godina=year)
+        send_email_with_zip(
+            broker_name,
+            zip_io,
+            filename=_broker_report_filename(broker_name, month, year, "zip"),
+            recipient_email="mirjana.mihajlovska@sigal.com.mk",
+            mesec=month,
+            godina=year
+        )
     
     cursor.close()
     conn.close()
@@ -517,6 +581,12 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
     # Create base directory
     base_dir = f"/opt/siglife-reporting/broker_excels/{year}/{month}"
     os.makedirs(base_dir, exist_ok=True)
+    for old_file in os.listdir(base_dir):
+        if old_file.lower().endswith(".xlsx"):
+            try:
+                os.remove(os.path.join(base_dir, old_file))
+            except Exception as e:
+                print(f"Could not remove old broker Excel {old_file}: {e}")
 
     conn, cursor, ok = OSISinitConn()
     if not ok:
@@ -533,6 +603,7 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
     if broker:
         sql_brokers += f" AND broker = '{broker}'"
     brokers, ok = fetch_query(sql_brokers)
+    brokers = _filter_allowed_brokers(brokers)
     if not ok or not brokers:
         return {"success": False, "message": "❌ No brokers found or DB error."}
 
@@ -579,12 +650,12 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
                 print(f"⚠️ Header mismatch for broker {broker}")
 
             # Save Excel to disk
-            file_path = f"{base_dir}/broker_{broker}.xlsx"
+            file_path = os.path.join(base_dir, _broker_report_filename(broker_name, month, year, "xlsx"))
             df.to_excel(file_path, index=False)
 
             # Try formatting the Excel
             try:
-                process_broker_excel(file_path)
+                process_broker_excel(file_path, kurs=vrati_kurs(mesec=month, godina=year))
                 print(f"Excel processed successfully for broker {broker}")
 
             except Exception as e:
@@ -600,14 +671,14 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
             trim(dogovoruvac_grad)dogovoruvac_grad ,trim(osigurenik)osigurenik , klasa,br_rati,rata,
             TO_CHAR(datum_napl, '%d/%m/%Y') as datum_napl,
             TO_CHAR(datum_zadol, '%d/%m/%Y') as datum_zadol,TO_CHAR(datum_valuta, '%d/%m/%Y') as datum_valuta,
-            koja_godina,osig_suma,premija_zivot,vkupna_premija,provizija_proc,prov_rata,
+            koja_godina,osig_suma,premija_zivot,vkupna_premija,provizija_proc,iznos_provizija AS prov_rata,
             premija_nezgoda, 0 prov_rata_nezgoda,naplata,naplata_den,aneks, TO_CHAR(skadenca_datum_od, '%d/%m/%Y') as skadenca_datum_od
             , period_osig, TO_CHAR(skadenca_datum_do, '%d/%m/%Y') as skadenca_datum_do
                 FROM vesna.provizija_client
                 WHERE YEAR(pap_datumod) = {year}
                 AND MONTH(pap_datumod) = {month}
                 AND broker = {broker}
-                and prov_rata<>0
+                and iznos_provizija<>0
             """
             cursor.execute(sql)
             rows = cursor.fetchall()
@@ -630,7 +701,7 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
                 print(f"⚠️ Header mismatch for broker {broker}")
 
             # Save Excel to disk
-            file_path = f"{base_dir}/broker_{broker}.xlsx"
+            file_path = os.path.join(base_dir, _broker_report_filename(broker_name, month, year, "xlsx"))
             df.to_excel(file_path, index=False)
 
             # Try formatting the Excel
@@ -658,7 +729,7 @@ def generate_excels_broker(month: int, year: int, broker: Optional[str] = None):
     }
 
 
-def create_encrypted_zip_broker(df: pd.DataFrame, password: str, filename="report.xlsx"):
+def create_encrypted_zip_broker(df: pd.DataFrame, password: str, filename="report.xlsx", kurs=0.0):
     """
     Create encrypted ZIP in memory using the new format_broker_excel_in_memory().
     Returns BytesIO with encrypted ZIP.
@@ -671,7 +742,7 @@ def create_encrypted_zip_broker(df: pd.DataFrame, password: str, filename="repor
 
     # 2️⃣ Apply full broker formatting
     try:
-        excel_stream = format_broker_excel_in_memory(excel_stream)
+        excel_stream = format_broker_excel_in_memory(excel_stream, kurs=kurs)
     except Exception as e:
         print("⚠️ Excel formatting failed:", e)
 

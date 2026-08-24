@@ -3,89 +3,166 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SigLifeReporting - Login</title>
+  <title>SigLife Reporting — Најава</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f0f4f8;
+      background: linear-gradient(135deg, #1a3a5c 0%, #2980b9 100%);
+      min-height: 100vh;
       display: flex;
-      justify-content: center;
       align-items: center;
-      height: 100vh;
-      margin: 0;
+      justify-content: center;
     }
-    .login-container {
-      background: white;
-      padding: 2rem 3rem;
-      border-radius: 10px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      width: 320px;
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      width: 360px;
+      overflow: hidden;
     }
-    h2 {
-      margin-bottom: 1.5rem;
-      color: #2c3e50;
+
+    .card-header {
+      background: linear-gradient(135deg, #1a3a5c, #2471a3);
+      padding: 2rem 2rem 1.6rem;
       text-align: center;
     }
+
+    .card-header img {
+      height: 48px;
+      margin-bottom: 0.8rem;
+    }
+
+    .card-header h1 {
+      color: #fff;
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .card-header p {
+      color: rgba(255,255,255,0.65);
+      font-size: 0.78rem;
+      margin-top: 0.25rem;
+    }
+
+    .card-body {
+      padding: 1.8rem 2rem 1.5rem;
+    }
+
+    .error-box {
+      background: #fdecea;
+      border-left: 4px solid #e74c3c;
+      color: #c0392b;
+      border-radius: 6px;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .field {
+      margin-bottom: 1.1rem;
+    }
+
     label {
       display: block;
-      margin-bottom: 0.3rem;
-      color: #34495e;
-      font-weight: 600;
-    }
-    input[type="text"], input[type="password"] {
-      width: 100%;
-      padding: 0.5rem 0.7rem;
-      margin-bottom: 1rem;
-      border: 1px solid #bdc3c7;
-      border-radius: 5px;
-      font-size: 1rem;
-      box-sizing: border-box;
-      transition: border-color 0.3s ease;
-    }
-    input[type="text"]:focus, input[type="password"]:focus {
-      border-color: #3498db;
-      outline: none;
-    }
-    button {
-      width: 100%;
-      background: #3498db;
-      border: none;
-      color: white;
-      padding: 0.7rem;
-      font-size: 1rem;
+      font-size: 0.78rem;
       font-weight: 700;
-      border-radius: 5px;
+      color: #5d6d7e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.35rem;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.6rem 0.85rem;
+      border: 1.5px solid #d5dbe3;
+      border-radius: 7px;
+      font-size: 0.95rem;
+      color: #2c3e50;
+      background: #f8fafc;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #2980b9;
+      box-shadow: 0 0 0 3px rgba(41,128,185,0.15);
+      outline: none;
+      background: #fff;
+    }
+
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #1a3a5c, #2980b9);
+      border: none;
+      color: #fff;
+      padding: 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 7px;
       cursor: pointer;
-      transition: background 0.3s ease;
+      letter-spacing: 0.3px;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 0.3rem;
     }
-    button:hover {
-      background: #2980b9;
-    }
-    .error-message {
-      color: #e74c3c;
-      font-weight: 600;
-      margin-bottom: 1rem;
+
+    .btn-login:hover  { opacity: 0.92; }
+    .btn-login:active { transform: scale(0.99); }
+
+    .forgot-link {
+      display: block;
       text-align: center;
+      margin-top: 1.1rem;
+      color: #2980b9;
+      text-decoration: none;
+      font-size: 0.82rem;
+    }
+
+    .forgot-link:hover { text-decoration: underline; }
+
+    .card-footer {
+      border-top: 1px solid #eef0f3;
+      padding: 0.75rem 2rem;
+      text-align: center;
+      font-size: 0.72rem;
+      color: #aab4be;
     }
   </style>
 </head>
 <body>
-  <div class="login-container">
-    <h2>Sign in to SigLifeReporting</h2>
+  <div class="card">
+    <div class="card-header">
+      <img src="/siglife-report/images/logo_uniqa_life.jpg" alt="UNIQA Life" onerror="this.style.display='none'" />
+      <h1>SigLife Reporting</h1>
+      <p>Систем за интерно известување</p>
+    </div>
 
-    {% if error %}
-    <div class="error-message">{{ error }}</div>
-    {% endif %}
+    <div class="card-body">
+      {% if error %}
+      <div class="error-box">{{ error }}</div>
+      {% endif %}
 
-    <form method="post" action="/siglife-report/login" autocomplete="off">
-      <label for="username">Username</label>
-      <input id="username" type="text" name="username" required autofocus />
+      <form method="post" action="/siglife-report/login" autocomplete="off">
+        <div class="field">
+          <label for="username">Корисничко ime</label>
+          <input id="username" type="text" name="username" required autofocus placeholder="username@siglife.mk" />
+        </div>
+        <div class="field">
+          <label for="password">Лозинка</label>
+          <input id="password" type="password" name="password" required placeholder="••••••••" />
+        </div>
+        <button type="submit" class="btn-login">Најави се</button>
+      </form>
 
-      <label for="password">Password</label>
-      <input id="password" type="password" name="password" required />
+      <a class="forgot-link" href="/siglife-report/forgot-password">Заборавена лозинка?</a>
+    </div>
 
-      <button type="submit">Log In</button>
-    </form>
+    <div class="card-footer">SIGAL Life a.d. Скопје &mdash; интерна употреба</div>
   </div>
 </body>
 </html>

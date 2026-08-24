@@ -48,7 +48,8 @@ def sendMailIzvestuvanje():
          SELECT client_name, client_adresa, client_post client_grad, polisa_broj polisa_number,datum_knizi due_date, 
                premija_tekovna premium_amount,naplata_tekovna  paid_premium, godina_tekovna godina,rata_tekovna  rata,period_tekoven period, 
                round(saldo_zaostanat_dolg,2) unpaid_premium, valuta,
-               saldo_zaostanat_dolg+premija_tekovna - naplata_tekovna vk_premija
+               saldo_zaostanat_dolg+premija_tekovna - naplata_tekovna vk_premija,
+               nacin_plakanje
         FROM vesna.print_izvest
         where klient_faktura= ?
         """
@@ -61,8 +62,8 @@ def sendMailIzvestuvanje():
         if not client_row:
             print(f"No client details found for faktura: {faktura}")
             continue
-        client_name, client_adresa, client_grad, polisa_number, due_date, premium_amount, paid_premium, godina, rata, period, unpaid_premium,  valuta,vk_premija = client_row  
-        print(f"Client details: {client_name}, {client_adresa}, {client_grad}, {polisa_number}, {due_date}, {premium_amount}, {paid_premium}, {godina}, {rata}, {period}, {unpaid_premium}, {valuta},{vk_premija}")
+        client_name, client_adresa, client_grad, polisa_number, due_date, premium_amount, paid_premium, godina, rata, period, unpaid_premium,  valuta,vk_premija, nacin_plakanje = client_row  
+        print(f"Client details: {client_name}, {client_adresa}, {client_grad}, {polisa_number}, {due_date}, {premium_amount}, {paid_premium}, {godina}, {rata}, {period}, {unpaid_premium}, {valuta},{vk_premija},{nacin_plakanje}")
         balance =premium_amount - paid_premium
         # vk_premija = balance + unpaid_premium
 
@@ -260,7 +261,7 @@ def sendMailIzvestuvanje():
         file_name = f"Izvestuvanje za dospeana premija_{safe_faktura}.pdf"
         full_path = os.path.join(full_save_path, file_name)
         generate_pdf(full_path, client_name,client_adresa, client_grad,polisa_number, due_date,
-                      premium_amount, paid_premium, balance,godina, rata,period,unpaid_premium, vk_premija, valuta)
+                      premium_amount, paid_premium, balance,godina, rata,period,unpaid_premium, vk_premija, valuta, nacin_plakanje)
         SendMail.send_html_email_with_attachments_image(
         recipient_email=email,
         subject="Известување за доспеана премија",

@@ -1,0 +1,2461 @@
+{
+  "templates": [
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "001",
+      "position": "A. НЕМАТЕРИЈАЛНИ СРЕДСТВА (002+003)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "002",
+      "position": "1. Гудвил",
+      "accounts": "000",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "003",
+      "position": "2. Останати нематеријални средства",
+      "accounts": "001, 002, 003, 004, 009",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "004",
+      "position": "Б. ВЛОЖУВАЊА (005+013+021+041)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "005",
+      "position": "I. ЗЕМЈИШТЕ, ГРАДЕЖНИ ОБЈЕКТИ И ОСТАНАТИ МАТЕРИЈАЛНИ СРЕДСТВА (006+009)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "006",
+      "position": "1. Земјиште и градежни објекти к ои служат за вршење на дејноста (007+008)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "007",
+      "position": "1.1. Земјиште",
+      "accounts": "010, 013д, 014д, 015д, 016д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "008",
+      "position": "1.2. Градежни објекти",
+      "accounts": "011, 013д, 014д, 015д, 016д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "009",
+      "position": "2. Земјиште, градежни објекти и останати средства кои не служат за вршење на дејноста (010+011+012)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "010",
+      "position": "2.1. Земјиште",
+      "accounts": "020, 023д, 024д, 025д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "011",
+      "position": "2.2. Градежни објекти",
+      "accounts": "021, 023д, 024д, 025д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "012",
+      "position": "2.3. Останати материјални средства",
+      "accounts": "022, 023д, 024д, 025д , 029",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "013",
+      "position": "II. ФИНАНСИСКИ ВЛОЖУВАЊА ВО ДРУШТВА ВО ГРУПА - ПОДРУЖНИЦИ, ПРИДРУЖЕНИ ДРУШТВА И ЗАЕДНИЧКИ КОНТРОЛИРАНИ ЕНТИТЕТИ (014+015+016+017+018+019+020)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "014",
+      "position": "1. Акции, удели и останати сопственички инструменти во друштва во група - подружници",
+      "accounts": "03002, 03012, 03022, 03032",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "015",
+      "position": "2. Должнички хартии од вредност кои ги издале друштва во група - подружници и заеми на друштва во група - подружници",
+      "accounts": "03000, 03001, 03003, 03010, 03011, 03013, 03020, 03021, 03023, 03030, 03031, 03033",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "016",
+      "position": "3. Акции, удели и останати сопственички инструменти во придружени друштва",
+      "accounts": "03102, 03112, 03122, 03132",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "017",
+      "position": "4. Должнички хартии од вредност кои ги издале придружени друштва и заеми на придружени друштва",
+      "accounts": "03100, 03101, 03103, 03110, 03111, 03113, 03120, 03121, 03123, 03130 , 03131, 03133",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "018",
+      "position": "5. Останати финансиски вложувања во друштва во група - подружници",
+      "accounts": "03004, 03009, 03014, 03019, 03024, 03029, 03034, 03039",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "019",
+      "position": "6. Останати финансиски вложувања во придружени друштва",
+      "accounts": "03104, 03109, 03114, 03119, 03124,03129, 03134, 03139",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "020",
+      "position": "7. Вложувања во заеднички контролирани ентитети",
+      "accounts": "032",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "021",
+      "position": "III. ОСТАНАТИ ФИНАНСИСКИ ВЛОЖУВАЊА (022+025+030+035+040)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "022",
+      "position": "1. Финансиски вложувања кои се чуваат до достасување (023+024)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "023",
+      "position": "1.1. Должнички хартии од вредност со рок на достасување до една година",
+      "accounts": "040000, 040010, 040100, 040110, 040200, 040210, 040290, 041000, 041010, 041100, 041110, 041200, 041210, 041290, 042000, 042010, 042100, 042110, 042200, 042210, 042290, 043000, 043010, 043100, 043110, 043200, 043210, 043290",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "024",
+      "position": "1.2. Должнички хартии од вредност со рок на достасување над една година",
+      "accounts": "040001, 040011, 040101, 040111, 040201, 040211, 040291, 041001, 041011, 041101, 041111, 041201, 041211, 041291, 042001, 042011, 042101, 042111, 042201, 042211, 042291, 043001, 043011, 043101, 043111, 043201, 043211, 043291",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "025",
+      "position": "2. Финансиски вложувања расположливи за продажба (026+027+028+029)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "026",
+      "position": "2.1. Должнички хартии од вредност со рок на достасување до една година",
+      "accounts": "050000, 050010, 050100, 050110, 050200, 050210, 050290, 051000, 051010, 051100, 051110, 051200, 051210, 051290, 052000, 052010, 052100, 052110, 052200, 052210, 052290, 053000, 053010, 053100, 053110, 053200, 053210, 053290",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "027",
+      "position": "2.2. Должнички хартии од вредност со рок на достасување над една година",
+      "accounts": "050001, 050011, 050101, 050111, 050201, 050211, 050291, 051001, 051011, 051101, 051111, 051201, 051211, 051291, 052001, 052011, 052101, 052111, 052201, 052211, 052291, 053001, 053011, 053101, 053111, 053201, 053211, 053291",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "028",
+      "position": "2.3. Акции, удели и останати сопственички инструменти",
+      "accounts": "050002, 050012, 050212, 050292, 051002, 051012, 051202, 051212, 051292, 052002, 052012, 052212, 052292, 053002, 053012, 053202, 053212, 053292",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "029",
+      "position": "2.4. Акции и удели во инвестициски фондови",
+      "accounts": "05022,05122,05222,05322",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "030",
+      "position": "3. Финансиски вложувања за тргување (031+032+033+034)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "031",
+      "position": "3.1. Должнички хартии од вредност со рок на достасување до една година",
+      "accounts": "060000, 060010, 060100, 060110, 060200, 060 210, 060290, 061000, 061010, 061100, 061110, 061200, 061210, 061290, 062000, 062010, 062100, 062110, 062200, 062210, 062290, 063000, 063010, 063100, 063110, 063200, 063210, 063290",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "032",
+      "position": "3.2. Должнички хартии од вредност со рок на достасување над една година",
+      "accounts": "060001, 060011, 060101, 060111, 060201, 060211, 060291, 061001, 061011, 061101, 061111, 061201, 061211, 061291, 062001, 062011, 062101, 062111, 062201, 062211, 062291, 063001, 063011, 063101, 063111, 063201, 063211, 063291",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "033",
+      "position": "3.3. Акции, удели и останати сопственички инструменти",
+      "accounts": "060002, 060012, 060212, 060292, 061002, 061012, 061202, 061212, 061292, 062002, 062012, 062212, 062292, 063002, 063012, 063202, 063212, 063292",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "034",
+      "position": "3.4. Акции и удели во инвестициски фондови",
+      "accounts": "06022, 06122, 06222, 06322",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "035",
+      "position": "4. Депозити, заеми и останати пласмани (036+037+038+039)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "036",
+      "position": "4.1. Дадени депозити",
+      "accounts": "080",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "037",
+      "position": "4.2. Заеми обезбедени со хипотека",
+      "accounts": "0810",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "038",
+      "position": "4.3. Останати заеми",
+      "accounts": "0811",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "039",
+      "position": "4.4. Останати пласмани",
+      "accounts": "083, 089",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "040",
+      "position": "5. Деривативни финансиски инструменти",
+      "accounts": "07",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "041",
+      "position": "IV. ДЕПОЗИТИ НА ДРУШТВА ЗА РЕОСИГУРУВАЊЕ КАЈ ЦЕДЕНТИ, ПО ОСНОВ НА ДОГОВОРИ ЗА РЕОСИГУРУВАЊЕ",
+      "accounts": "133",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "042",
+      "position": "В. ДЕЛ ЗА СООСИГУРУВАЊЕ И РЕОСИГУРУВАЊЕ ВО БРУТО ТЕХНИЧКИТЕ РЕЗЕРВИ (043+044+045+046+047+048 +049)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "043",
+      "position": "1. Дел за соосигурување и реосигурување во бруто резервата за преносна премија",
+      "accounts": "6001",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "044",
+      "position": "2. Дел за соосигурување и реосигурување во бруто математичката резерва",
+      "accounts": "6011",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "045",
+      "position": "3. Дел за соосигурување и реосигурување во бруто резервите за штети",
+      "accounts": "6031, 6041",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "046",
+      "position": "4. Дел за соосигурување и реосигурување во бруто резервите за бонуси и попусти",
+      "accounts": "6051",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "047",
+      "position": "5. Дел за соосигурување и реосигурување во бруто еквилизационата резерва",
+      "accounts": "6061",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "048",
+      "position": "6. Дел за соосигурување и реосигурување во бруто останатите технички резерви",
+      "accounts": "6071",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "049",
+      "position": "7. Дел за соосигурување и реосигурување во бруто техничките резерви за осигурување на живот каде осигуреникот го презема инвестицискиот ризик",
+      "accounts": "6021",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "050",
+      "position": "Г. ФИНАНСИСКИ ВЛОЖУВАЊА КАЈ КОИ ОСИГУРЕНИКОТ ГО ПРЕЗЕМА ИНВЕСТИЦИСКИОТ РИЗИК (ДОГОВОРИ ЗА ОСИГУРУВАЊЕ)",
+      "accounts": "09",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "051",
+      "position": "Д. ОДЛОЖЕНИ И ТЕКОВНИ ДАНОЧНИ СРЕДСТВА (052+053)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "052",
+      "position": "1. Одложени даночни средства",
+      "accounts": "198",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "053",
+      "position": "2. Тековни даночни средства",
+      "accounts": "170",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "054",
+      "position": "Ѓ. ПОБАРУВАЊА (055+059+063+067)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "055",
+      "position": "I. ПОБАРУВАЊА ОД НЕПОСРЕДНИ РАБОТИ НА ОСИГУРУВАЊЕ (056+057+058)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "056",
+      "position": "1. Побарувања од осигуреници",
+      "accounts": "120, 121, 129 д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "057",
+      "position": "2. Побарувања од застапници и посредници",
+      "accounts": "122,129д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "058",
+      "position": "3. Останати побарувања од непосредни работи на осигурување",
+      "accounts": "128,129д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "059",
+      "position": "II. ПОБАРУВАЊА ОД РАБОТИ НА СООСИГУРУВАЊЕ И РЕОСИГУРУВАЊЕ (060+061+062)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "060",
+      "position": "1. Побарувања по основ на премија за соосигурување и реосигурување",
+      "accounts": "130, 131, 132, 139д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "061",
+      "position": "2. Побарувања по основ на учество во надомест на штети од соосигурување и реосигурување",
+      "accounts": "140, 141, 142, 149д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "062",
+      "position": "3. Останати побарувања од работи на соосигурување и реосигурување",
+      "accounts": "138,139д,148,149д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "063",
+      "position": "III. ОСТАНАТИ ПОБАРУВАЊА (064+065+066)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "064",
+      "position": "1. Останати побарувања од непосредни работи на осигурување",
+      "accounts": "15",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "065",
+      "position": "2. Побарувања по основ на финансиски вложувања",
+      "accounts": "16",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "066",
+      "position": "3. Останати побарувања",
+      "accounts": "171, 172, 173, 174, 175, 178д, 179",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "067",
+      "position": "IV. ПОБАРУВАЊА ПО ОСНОВ НА ЗАПИШАН А НЕУПЛАТЕН КАПИТАЛ",
+      "accounts": "178д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "068",
+      "position": "Е. ОСТАНАТИ СРЕДСТВА (069+072+077)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "069",
+      "position": "I. МАТЕРИЈАЛНИ СРЕДСТВА КОИ СЛУЖАТ ЗА ВРШЕЊЕ НА ДЕЈНОСТА (ОСВЕН ЗЕМЈИШТЕ И ГРАДЕЖНИ ОБЈЕКТИ) (070+071)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "070",
+      "position": "1. Опрема",
+      "accounts": "012, 013д, 014д, 015д , 016д",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "071",
+      "position": "2. Останати материјални средства",
+      "accounts": "013д, 014д, 015д, 016д, 019",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "072",
+      "position": "II. ПАРИЧНИ СРЕДСТВА И ОСТАНАТИ ПАРИЧНИ ЕКВИВАЛЕНТИ (073+074+075+076)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "073",
+      "position": "1. Парични средства во банка",
+      "accounts": "100, 102, 104",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "074",
+      "position": "2. Парични средства во благајна",
+      "accounts": "103, 105",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "075",
+      "position": "3. Издвоени парични средства за покривање на математичката резерва",
+      "accounts": "101",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "076",
+      "position": "4. Останати парични средства парични еквиваленти",
+      "accounts": "106, 109, 110, 111, 112, 119",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "077",
+      "position": "III. ЗАЛИХИ И СИТЕН ИНВЕНТАР",
+      "accounts": "30, 31, 32",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "078",
+      "position": "Ж. АКТИВНИ ВРЕМЕНСКИ РАЗГРАНИЧУВАЊА (079+080+081)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "079",
+      "position": "1. Претходно пресметани приходи по основ на камати и наемнини",
+      "accounts": "190",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "080",
+      "position": "2. Одложени трошоци на стекнување",
+      "accounts": "192",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "081",
+      "position": "3. Останати пресметани приходи и одложени трошоци",
+      "accounts": "191,193,199",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "082",
+      "position": "З. НЕТЕКОВНИ СРЕДСТВА КОИ СЕ ЧУВААТ ЗА ПРОДАЖБА И ПРЕКИНАТО РАБОТЕЊЕ",
+      "accounts": "082",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "083",
+      "position": "Ѕ. ВКУПНА АКТИВА (А+Б+В+Г+Д+Ѓ+Е+Ж+З)",
+      "accounts": "",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "084",
+      "position": "И. ВОН БИЛАНСНА ЕВИДЕНЦИЈА - АКТИВА",
+      "accounts": "990, 991, 992, 993 и 994",
+      "type": "Актива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "085",
+      "position": "ПАСИВА А. КАПИТАЛ И РЕЗЕРВИ (086+090+091+095+101-102+103- 104)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "086",
+      "position": "I. ЗАПИШАН КАПИТАЛ (087+088+089)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "087",
+      "position": "1. Запишан капитал од обични акции",
+      "accounts": "900",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "088",
+      "position": "2. Запишан капитал од приоритетни акции",
+      "accounts": "901",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "089",
+      "position": "3. Запишан а неуплатен капитал",
+      "accounts": "902",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "090",
+      "position": "II. ПРЕМИИ ЗА ЕМИТИРАНИ АКЦИИ",
+      "accounts": "91",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "091",
+      "position": "III. РЕВАЛОРИЗАЦИОНА РЕЗЕРВА (092+093+094)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "092",
+      "position": "1. Материјални средства",
+      "accounts": "931",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "093",
+      "position": "2. Финансиски вложувања",
+      "accounts": "932",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "094",
+      "position": "3. Останати ревалоризациони резерви",
+      "accounts": "930, 939",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "095",
+      "position": "IV. РЕЗЕРВИ (096+097+098-099+100)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "096",
+      "position": "1. Законски резерви",
+      "accounts": "9210",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "097",
+      "position": "2. Статутарни резерви",
+      "accounts": "9212",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "098",
+      "position": "3. Резерви за сопствени акции",
+      "accounts": "9211",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "099",
+      "position": "4. Откупени сопствени акции",
+      "accounts": "922",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "100",
+      "position": "Останати резерви",
+      "accounts": "9213",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "101",
+      "position": "V. НЕРАСПРЕДЕЛЕНА НЕТО ДОБИВКА",
+      "accounts": "940",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "102",
+      "position": "VI. ПРЕНЕСЕНА ЗАГУБА",
+      "accounts": "941",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "103",
+      "position": "VII. ДОБИВКА ЗА ТЕКОВНИОТ ПРЕСМЕТКОВЕН ПЕРИОД",
+      "accounts": "950",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "104",
+      "position": "VIII. ЗАГУБА ЗА ТЕКОВНИОТ ПРЕСМЕТКОВЕН ПЕРИОД",
+      "accounts": "951",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "105",
+      "position": "Б. СУБОРДИНИРАНИ ОБВРСКИ",
+      "accounts": "247",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "106",
+      "position": "В. БРУТО ТЕХНИЧКИ РЕЗЕРВИ (107+108+109+110+111+112)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "107",
+      "position": "I. Бруто резерви за преносни премии",
+      "accounts": "6000",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "108",
+      "position": "II. Бруто математичка резерва",
+      "accounts": "6010",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "109",
+      "position": "III. Бруто резерви за штети",
+      "accounts": "6030, 6040",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "110",
+      "position": "IV. Бруто резерви за бонуси и попусти",
+      "accounts": "6050",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "111",
+      "position": "V. Бруто еквилизациона резерва",
+      "accounts": "6060",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "112",
+      "position": "VI. Бруто останати технички резерви",
+      "accounts": "6070",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "113",
+      "position": "Г. БРУТО ТЕХНИЧКИ РЕЗЕРВИ ВО ОДНОС НА ДОГОВОРИ КАЈ КОИ ОСИГУРЕНИКОТ ГО ПРЕЗЕМА ИНВЕСТИЦИСКИОТ РИЗИК",
+      "accounts": "6020",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "114",
+      "position": "Д. ОСТАНАТИ РЕЗЕРВИ (115+116)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "115",
+      "position": "1. Резерви за вработени",
+      "accounts": "250, 251, 252, 259д",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "116",
+      "position": "2. Останати резерви",
+      "accounts": "253, 254, 255, 259д",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "117",
+      "position": "Ѓ. ОДЛОЖЕНИ И ТЕКОВНИ ДАНОЧНИ ОБВРСКИ (118+119)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "118",
+      "position": "1. Одложени даночни обврски",
+      "accounts": "295",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "119",
+      "position": "2. Тековни даночни обврски",
+      "accounts": "280",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "120",
+      "position": "Е. ОБВРСКИ КОИ ПРОИЗЛЕГУВААТ ОД ДЕПОЗИТИ НА ДРУШТВА ЗА РЕОСИГУРУВАЊЕ КАЈ ЦЕДЕНТИ, ПО ОСНОВ НА ДОГОВОРИ ЗА РЕОСИГУРУВАЊЕ",
+      "accounts": "212",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "121",
+      "position": "Ж. ОБВРСКИ (122+126+130)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "122",
+      "position": "I. ОБВРСКИ ОД НЕПОСРЕДНИ РАБОТИ НА ОСИГУРУВАЊЕ (123+124+125)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "123",
+      "position": "1. Обврски спрема осигуреници",
+      "accounts": "200, 201",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "124",
+      "position": "2. Обврски спрема застапници и посредници",
+      "accounts": "202",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "125",
+      "position": "3. Останати обврски од непосредни работи на осигурување",
+      "accounts": "209",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "126",
+      "position": "II. ОБВРСКИ ОД РАБОТИ НА СООСИГУРУВАЊЕ И РЕОСИГУРУВАЊЕ (127+128+129)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "127",
+      "position": "1. Обврски по основ на премија за соосигурување и реосигурување",
+      "accounts": "210, 211",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "128",
+      "position": "2. Обврски по основ на учество во надомест на штети",
+      "accounts": "220, 221, 222",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "129",
+      "position": "3. Останати обврски од работи на соосигурување и реосигурување",
+      "accounts": "219, 229",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "130",
+      "position": "III. ОСТАНАТИ ОБВРСКИ (131+132+133)",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "131",
+      "position": "1. Останати обврски од непосредни работи на осигурување",
+      "accounts": "23",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "132",
+      "position": "2. Обврски по основ на финансиски вложувања",
+      "accounts": "24",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "133",
+      "position": "3. Останати обврски",
+      "accounts": "27, 281,282,283,284,285,286,289д",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "134",
+      "position": "З. ПАСИВНИ ВРЕМЕНСКИ РАГРАНИЧУВАЊА",
+      "accounts": "290, 291, 292, 293, 294, 296",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "135",
+      "position": "Ѕ. НЕТЕКОВНИ ОБВРСКИ ВО ВРСКА СО НЕТЕКОВНИ СРЕДСТВА КОИ СЕ ЧУВААТ ЗА ПРОДАЖБА И ПРЕКИНАТО РАБОТЕЊЕ",
+      "accounts": "289д",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "136",
+      "position": "И. ВКУПНА ПАСИВА А+Б+В+Г+Д+Ѓ+Е+Ж+З+Ѕ",
+      "accounts": "",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на состојба",
+      "report_key": "balance_sheet",
+      "code": "137",
+      "position": "Ј. ВОН БИЛАНСНА ЕВИДЕНЦИЈА - ПАСИВА",
+      "accounts": "995, 996, 997, 998 и 999",
+      "type": "Пасива",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "200",
+      "position": "A. ПРИХОДИ ОД РАБОТЕЊЕТО (201+210+224+225)",
+      "accounts": "",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "201",
+      "position": "I. ЗАРАБОТЕНА ПРЕМИЈА (НЕТО ПРИХОДИ ОД ПРЕМИЈА (202+203+204-205-206-207+208+209)",
+      "accounts": "",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "202",
+      "position": "1. Бруто полисирана премија за осигурување",
+      "accounts": "700",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "203",
+      "position": "2. Бруто полисирана премија за соосигурување",
+      "accounts": "701",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "204",
+      "position": "3. Бруто полисирана премија за реосигурување и ретроцесија",
+      "accounts": "702",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "205",
+      "position": "4. Бруто полисирана премија предадена во соосигурување",
+      "accounts": "703",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "206",
+      "position": "5. Бруто полисирана премија предадена во реосигурување/ ретроцесија",
+      "accounts": "704",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "207",
+      "position": "6. Промена во бруто резервата за преносна премија",
+      "accounts": "705",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "208",
+      "position": "7. Промена во бруто резервата за преносна премија - дел за соосигурување",
+      "accounts": "706",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "209",
+      "position": "8. Промена во бруто резервата за преносна премија - дел за реосигурување",
+      "accounts": "707",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "210",
+      "position": "II. ПРИХОДИ ОД ВЛОЖУВАЊА (211+212+216+217+218+219+223)",
+      "accounts": "",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "211",
+      "position": "1. Приходи од подружници, придружени друштва и заеднички контролирани ентитети",
+      "accounts": "7200, 7210, 7220, 7230, 7240, 7250, 7260, 7270, 729д",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "212",
+      "position": "2. Приходи од вложувања во земјиште и градежни објекти (213+214+215)",
+      "accounts": "",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "213",
+      "position": "2.1. Приходи од наемнини",
+      "accounts": "7279",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "214",
+      "position": "Друштвото за осигурување кое истовремено врши работ и на неживотно осигурување и осигурување на живот, изготвува два посебни биланси на успех 2.2. Приходи од зголемување на вредноста на земјиште и градежни објекти",
+      "accounts": "7245",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "215",
+      "position": "2.3. Приходи од продажба на земјиште и градежни објекти",
+      "accounts": "7263",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "216",
+      "position": "3. Приходи од камати",
+      "accounts": "7201, 7202, 7203, 7204, 7205, 7206, 7209",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "217",
+      "position": "4. Позитивни курсни разлики",
+      "accounts": "7221, 7222, 7223, 7224, 7225, 7226, 7229",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "218",
+      "position": "5. Вредносно усогласување (нереализирани добивки, сведување на објективна вредност)",
+      "accounts": "7251, 7252, 7253, 7259",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "219",
+      "position": "6. Реализирани добивки од продажба на финансиски имот - капитална добивка (220+221+222)",
+      "accounts": "",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "220",
+      "position": "6.1. Финансиски вложувања расположливи за продажба",
+      "accounts": "7261",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "221",
+      "position": "6.2. Финансиски вложувања за тргување (по објективна вредност)",
+      "accounts": "7262",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "222",
+      "position": "6.3. Останати финансиски вложувања",
+      "accounts": "7269",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "223",
+      "position": "7. Останати приходи од вложувања",
+      "accounts": "7211, 7231, 7232, 7239, 7241, 7242,7243, 7244, 7249, 729д",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "224",
+      "position": "III. ОСТАНАТИ ОСИГУРИТЕЛНО-ТЕХНИЧКИ ПРИХОДИ, НАМАЛЕНИ ЗА РЕОСИГУРУВАЊЕ",
+      "accounts": "710, 711, 712, 719",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "225",
+      "position": "IV. ОСТАНАТИ ПРИХОДИ",
+      "accounts": "730, 731, 732, 733, 734, 735, 736, 737, 738, 739",
+      "type": "Приход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "226",
+      "position": "Б. РАСХОДИ ОД РАБОТЕЊЕТО (227+235+245+248+251+261+271+274+275)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "227",
+      "position": "I. НАСТАНАТИ ШТЕТИ (НЕТО ТРОШОЦИ ЗА ШТЕТИ) (228-229-230-231+232-233-234)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "228",
+      "position": "1. Бруто исплатени штети",
+      "accounts": "400",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "229",
+      "position": "2. Намалување за приходот од бруто реализирани регресни побарувања",
+      "accounts": "401",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "230",
+      "position": "3. Бруто исплатени штети – дел за соосигурување",
+      "accounts": "402",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "231",
+      "position": "4. Бруто исплатени штети – дел за реосигурување/ретроцесија",
+      "accounts": "403",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "232",
+      "position": "5. Промени во бруто резервите за штети",
+      "accounts": "404",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "233",
+      "position": "6. Промени во бруто резервите за штети – дел за соосигурување",
+      "accounts": "405",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "234",
+      "position": "7. Промени во бруто резервите за штети – дел за реосигурување",
+      "accounts": "406",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "235",
+      "position": "II. ПРОМЕНИ ВО ОСТАНАТИТЕ ТЕХНИЧКИ РЕЗЕРВИ, НЕТО ОД РЕОСИГУРУВАЊЕ (236+239+242)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "236",
+      "position": "1. Промени во математичката резерва, нето од реосигурување (237-238)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "237",
+      "position": "1.1. Промени во бруто математичката резерва",
+      "accounts": "4100, 4102, 4103",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "238",
+      "position": "1.2. Промени во бруто математичката резерва - дел за соосигурување/реосигурување",
+      "accounts": "4110, 4112, 4113",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "239",
+      "position": "2. Промени во еквилизационата резерва, нето од реосигурување (240-241)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "240",
+      "position": "2.1. Промени во еквилизационата резерва, нето од реосигурување",
+      "accounts": "414",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "241",
+      "position": "2.2. Промени во бруто еквилизационата резерва - дел за соосигурување/реосигурување",
+      "accounts": "415",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "242",
+      "position": "3. Промени во останатите технички резерви, нето од реосигурување (243-244)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "243",
+      "position": "3.1. Промени во останатите бруто технички резерви",
+      "accounts": "412, 416",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "244",
+      "position": "3.2. Промени во останатите бруто технички резерви – дел за соосигурување и реосигурување",
+      "accounts": "413, 417",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "245",
+      "position": "III. ПРОМЕНИ ВО БРУТО МАТЕМАТИЧКАТА РЕЗЕРВА ЗА ОСИГУРУВАЊЕ НА ЖИВОТ КАДЕ ИНВЕСТИЦИОНИОТ РИЗИК Е НА ТОВАР НА ОСИГУРЕНИКОТ, НЕТО ОД РЕОСИГУРУВАЊЕ (246-247)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "246",
+      "position": "1. Промени во бруто математичката резерва за осигурување на живот каде инвестициониот ризик е на товар на осигуреникот",
+      "accounts": "4101",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "247",
+      "position": "2. Промени во бруто математичката резерва за осигурување на живот каде инвестициониот ризик е на товар на осигуреникот – дел за соосигурување и реосигурување",
+      "accounts": "4111",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "248",
+      "position": "IV. ТРОШОЦИ ЗА БОНУСИ И ПОПУСТИ, НЕТО ОД РЕОСИГУРУВАЊЕ (249+250)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "249",
+      "position": "1. Трошоци за бонуси (кои зависат од резултатот)",
+      "accounts": "4200",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "250",
+      "position": "2. Трошоци за попусти (кои не зависат од резултатот)",
+      "accounts": "4201",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "251",
+      "position": "V. НЕТО ТРОШОЦИ ЗА СПРОВЕДУВАЊЕ НА ОСИГУРУВАЊЕТО (252+256)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "252",
+      "position": "1. Трошоци за стекнување (253+254+255)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "253",
+      "position": "1.1. Провизија",
+      "accounts": "430",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "254",
+      "position": "1.2. Останати трошоци за стекнување",
+      "accounts": "4370, 4371д, 453д, 4700",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "255",
+      "position": "1.3. Промена во одложените трошоци за стекнување",
+      "accounts": "438",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "256",
+      "position": "2. Административни трошоци (257+258+259+260)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "257",
+      "position": "2.1. Амортизација на материјални средства кои служат за вршење на дејноста",
+      "accounts": "44",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "258",
+      "position": "2.2. Трошоци за вработените",
+      "accounts": "4701, 4702, 471, 479",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "259",
+      "position": "2.3. Трошоци за услуги на физички лица кои не вршат дејност (договори за работа, авторски договори и други правни односи) заедно со сите давачки",
+      "accounts": "431",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "260",
+      "position": "2.4. Останати административни трошоци",
+      "accounts": "432, 433,434, 435, 436, 4371д, 4372, 439, 450,451,452,453д, 454,455,456,459, 460, 461, 462, 463, 464, 465, 466, 467, 468, 469",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "261",
+      "position": "VI. ТРОШОЦИ ОД ВЛОЖУВАЊА (262+263+264+265+266+270)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "262",
+      "position": "1. Амортизација и вредносно усогласување на материјални средства кои не служат за вршење на дејноста",
+      "accounts": "490",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "263",
+      "position": "2. Трошоци за камати",
+      "accounts": "480",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "264",
+      "position": "3. Негативни курсни разлики",
+      "accounts": "481",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "265",
+      "position": "4. Вредносно усогласување (нереализирани загуби, сведување на објективна вредност)",
+      "accounts": "483",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "266",
+      "position": "5. Реализирани загуби од продажба на финансиски имот - капитална загуба (267+268+269)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "267",
+      "position": "5.1. Финансиски вложувања расположливи за продажба",
+      "accounts": "4841",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "268",
+      "position": "5.2. Финансиски вложувања за тргување (по објективна вредност)",
+      "accounts": "4842",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "269",
+      "position": "5.3. Останати финансиски вложувања",
+      "accounts": "4840, 4843, 4849",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "270",
+      "position": "6. Останати трошоци од вложувања",
+      "accounts": "482,485,489",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "271",
+      "position": "VII. ОСТАНАТИ ОСИГУРИТЕЛНО-ТЕХНИЧКИ ТРОШОЦИ, НАМАЛЕНИ ЗА РЕОСИГУРУВАЊЕ (272+273)",
+      "accounts": "",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "272",
+      "position": "1. Трошоци за превентива",
+      "accounts": "424",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "273",
+      "position": "2. Останати осигурително технички трошоци, намалени за реосигурување",
+      "accounts": "421, 422, 423, 425, 429",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "274",
+      "position": "VIII. ВРЕДНОСНО УСОГЛАСУВАЊE НА ПОБАРУВАЊАТА ПО ОСНОВ НА ПРЕМИЈА",
+      "accounts": "494",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "275",
+      "position": "IX. ОСТАНАТИ РАСХОДИ, ВКЛУЧУВАЈЌИ И ВРЕДНОСНИ УСОГЛАСУВАЊА",
+      "accounts": "491, 492, 493, 495,496, 497, 498",
+      "type": "Расход",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "276",
+      "position": "X. ДОБИВКА ЗА ДЕЛОВНАТА ГОДИНА ПРЕД ОД АНОЧУВАЊЕ (200-226)",
+      "accounts": "801",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "277",
+      "position": "XI. ЗАГУБА ЗА ДЕЛОВНАТА ГОДИНА ПРЕД ОДАНОЧУВАЊЕ (226-200)",
+      "accounts": "802",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "278",
+      "position": "XII. ДАНОК НА ДОБИВКА, ОДНОСНО ЗАГУБА",
+      "accounts": "810, 811",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "279",
+      "position": "XIII. ОДЛОЖЕН ДАНОК",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "280",
+      "position": "XIV. ДОБИВКА ЗА ДЕЛОВНАТА ГОДИНА ПО ОДДАНОЧУВАЊЕ (276-278-279)",
+      "accounts": "820",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Биланс на успех",
+      "report_key": "income_statement",
+      "code": "281",
+      "position": "XV. ЗАГУБА ЗА ДЕЛОВНАТА ГОДИНА ПО ОДАНОЧУВАЊЕ (277-278-279)",
+      "accounts": "821",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "300",
+      "position": "A. ПАРИЧНИ ТЕКОВИ ОД ДЕЛОВНИ АКТИВНОСТИ I. ПАРИЧНИ ПРИЛИВИ ОД ДЕЛОВНИ АКТИВНОСТИ (301+302+303+304+305)",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "301",
+      "position": "1. Премија за осигурување и соосигурување и примени аванси",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "302",
+      "position": "2. Премија за реосигурување и ретроцесија",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "303",
+      "position": "3. Приливи од учество во надомест на штети",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "304",
+      "position": "4. Примени камати од работи на осигурување",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "305",
+      "position": "5. Останати приливи од деловни активности",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "306",
+      "position": "II. ПАРИЧНИ ОДЛИВИ ОД ДЕЛОВНИ АКТИВНОСТИ (307+308+309+310+311+312+313+314)",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "307",
+      "position": "1. Исплатени штети, договорени суми на осигурување, учество во надомест на штети од соосигурување и дадени аванси",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "308",
+      "position": "2. Исплатени штети и учество во надомест на штети од реосигурување и ретроцесија",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "309",
+      "position": "3. Премија за соосигурување, реосигурување и ретроцесија",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "310",
+      "position": "4. Надоместоци и други лични расходи",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "311",
+      "position": "5. Останати трошоци за спроведување на осигурување",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "312",
+      "position": "6. Платени камати",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "313",
+      "position": "7. Данок на добивка и останати јавни давачки",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "314",
+      "position": "8. Останати одливи од редовни активности",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "315",
+      "position": "III. НЕТО ПАРИЧНИ ПРИЛИВИ ОД ДЕЛОВНИ АКТИВНОСТИ (300-306)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "316",
+      "position": "IV. НЕТО ПАРИЧНИ ОДЛИВИ ОД ДЕЛОВНИ АКТИВНОСТИ (306-300)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "317",
+      "position": "Б. ПАРИЧНИ ТЕКОВИ ОД ВЛОЖУВАЊА I. ПАРИЧНИ ПРИЛИВИ ОД ВЛОЖУВАЊА (318+319+320+321+322+323+324+325)",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "318",
+      "position": "1. Приливи по основ на нематеријални средства",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "319",
+      "position": "2. Приливи по основ на материјални средства",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "320",
+      "position": "3. Приливи по основ на материјални средства кои не служат за вршење на дејноста на друштвото",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "321",
+      "position": "4. Приливи по основ на вложувања во друштва во група – подружници, придружени друштва и заеднички контролирани ентитети",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "322",
+      "position": "5. Приливи по основ на вложувања кои се чуваат до достасување",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "323",
+      "position": "6. Приливи по основ на останати финансиски пласмани",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "324",
+      "position": "7. Приливи од дивиденди и останати учества во добивка",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "325",
+      "position": "8. Приливи од камати",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "326",
+      "position": "II. ПАРИЧНИ ОДЛИВИ ОД ВЛОЖУВАЊА (327+328+329+330+331+332+333+334)",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "327",
+      "position": "1. Одливи по основ на нематеријални средства",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "328",
+      "position": "2. Одливи по основ на материјални средства",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "329",
+      "position": "3. Одливи по основ на материјални средства кои не служат за вршење на дејноста на друштвото",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "330",
+      "position": "4. Одливи по основ на вложувања во друштва во група – подружници, придружени друштва и заеднички контролирани ентитети",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "331",
+      "position": "5. Одливи по основ на вложувања кои се чуваат до достасување",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "332",
+      "position": "6. Одливи по основ на останати финансиски пласмани",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "333",
+      "position": "7. Одливи од дивиденди и останати учества во добивка",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "334",
+      "position": "8. Одливи од камати",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "335",
+      "position": "III. НЕТО ПАРИЧНИ ПРИЛИВИ ОД ВЛОЖУВАЊА (317-326)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "336",
+      "position": "IV. НЕТО ПАРИЧНИ ОДЛИВИ ОД ВЛОЖУВАЊА (326-317)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "337",
+      "position": "В. ПАРИЧНИ ТЕКОВИ ОД ФИНАНСИСКИ АКТИВНОСТИ I. ПАРИЧНИ ПРИЛИВИ ОД ФИНАНСИСКИ АКТИВНОСТИ (338+339+340)",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "338",
+      "position": "1. Приливи по основ на зголемување на акционерскиот капитал",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "339",
+      "position": "2. Приливи по основ на примени краткорочни и долгорочни кредити и заеми",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "340",
+      "position": "3. Приливи по основ на останати долгорочни и краткорочни обврски",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "341",
+      "position": "II. ПАРИЧНИ ОДЛИВИ ОД ФИНАНСИСКИ АКТИВНОСТИ (342+343+344)",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "342",
+      "position": "1. Одливи по основ на отплата на краткорочни и долгорочни кредити и заеми и останати обврски",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "343",
+      "position": "2. Одливи по основ на откуп на сопствени акции",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "344",
+      "position": "3. Одливи по основ на исплата на дивиденда",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "345",
+      "position": "III. НЕТО ПАРИЧНИ ПРИЛИВИ ОД ФИНАНСИСКИ АКТИВНОСТИ (337-341)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "346",
+      "position": "IV. НЕТО ПАРИЧНИ ОДЛИВИ ОД ФИНАНСИСКИ АКТИВНОСТИ (341-337)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "347",
+      "position": "Г. ВКУПНО ПАРИЧНИ ПРИЛИВИ (300+317+337)",
+      "accounts": "",
+      "type": "Прилив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "348",
+      "position": "Д. ВКУПНО ПАРИЧНИ ОДЛИВИ (306+326+341)",
+      "accounts": "",
+      "type": "Одлив",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "349",
+      "position": "Ѓ. НЕТО ПАРИЧНИ ПРИЛИВИ (347-348)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "350",
+      "position": "Е. НЕТО ПАРИЧНИ ОДЛИВИ (348-347)",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "351",
+      "position": "Ж. ПАРИ И ПАРИЧНИ ЕКВИВАЛЕНТИ НА ПОЧЕТОКОТ НА ПРЕСМЕТКОВНИОТ ПЕРИОД",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "352",
+      "position": "З. ЕФЕКТ ОД ПРОМЕНА НА КУРСОТ НА СТРАНСКИ ВАЛУТИ ВРЗ ПАРИ И ПАРИЧНИ ЕКВИВАЛЕНТИ",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    },
+    {
+      "statement": "Cash Flow",
+      "report_key": "cash_flow",
+      "code": "353",
+      "position": "Ѕ. ПАРИ И ПАРИЧНИ ЕКВИВАЛЕНТИ НА КРАЈОТ НА ПРЕСМЕТКОВНИОТ ПЕРИОД (349-350+351+352))",
+      "accounts": "",
+      "type": "Пресметка",
+      "source": "Pravilnik-za-finansiskite-izvestai.pdf"
+    }
+  ]
+}

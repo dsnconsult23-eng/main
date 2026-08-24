@@ -10,6 +10,7 @@ from typing import Optional, List
 import smtplib
 import datetime
 import time
+import jpype
 
 
 def send_many_emails_with_logo_and_db_log(
@@ -23,6 +24,7 @@ def send_many_emails_with_logo_and_db_log(
 ):
     sent = 0
     failed = 0
+    audit_warnings = []
 
     host = smtp_cfg.get("smtp_host")
     port = smtp_cfg.get("smtp_port")
@@ -127,6 +129,9 @@ def send_many_emails_with_logo_and_db_log(
             client_name = rec.get("client_name")
             address = rec.get("address")
             city = rec.get("city")
+            datum_do = rec.get("datum_do")
+            document_type = str(rec.get("document_type") or "").strip().lower()
+            tip = "I" if document_type == "izvestuvanja" else "O"
             pdf_paths = rec.get("pdf_paths") or []
             print(client_id)
             print("Cl")
@@ -167,12 +172,16 @@ def send_many_emails_with_logo_and_db_log(
                             client_name=client_name,
                             address=address,
                             city=city,
+                            datum_do=datum_do,
                             attachment_path=file_path,
                             attachment_filename=file_name,
                             attachment_position=1 if file_name else None,
+                            tip=tip,
                         )
                     except Exception as e:
-                        print(f"⚠️ Audit SENT failed for {email}: {e}")
+                        warn = f"⚠️ Audit SENT failed for {email}: {e}"
+                        print(warn)
+                        audit_warnings.append(warn)
 
                     try:
                         conn, OK = Connection.OSISinit()
@@ -235,9 +244,11 @@ def send_many_emails_with_logo_and_db_log(
                         client_name=client_name,
                         address=address,
                         city=city,
+                        datum_do=datum_do,
                         attachment_path=pdf_paths[0] if pdf_paths else None,
                         attachment_filename=os.path.basename(pdf_paths[0]) if pdf_paths else None,
                         attachment_position=1 if pdf_paths else None,
+                        tip=tip,
                     )
                 except Exception as e:
                     print(f"⚠️ Audit FAILED failed for {email}: {e}")
@@ -262,7 +273,7 @@ def send_many_emails_with_logo_and_db_log(
         except Exception:
             pass
 
-    return sent, failed
+    return sent, failed, audit_warnings
 
 # ===========================
 # Audit log
@@ -281,68 +292,102 @@ def _audit_email_to_db(
     client_name: Optional[str] = None,
     address: Optional[str] = None,
     city: Optional[str] = None,
+    datum_do: Optional[str] = None,
     attachment_path: Optional[str] = None,
     attachment_filename: Optional[str] = None,
     attachment_position: Optional[int] = None,
+    tip: str = "O",
 ):
-    results, OK = Connection.OSISinit()
-    if not OK:
-        print("[AUDIT][DB] ❌ No DB connection")
-        return
+    conn, cur, OK = Connection.OSISinitConn()
+    if not OK or conn is None or cur is None:
+        raise Exception("[AUDIT][DB] No DB connection")
 
-    cur = results  # кај тебе најчесто ова е cursor
-    try:
-        sql = """
-            INSERT INTO email_audit_log
-            (
-                job_id,
-                recipient,
-                subject,
-                message_id,
-                status,
-                error_message,
-                attachments_cnt,
-                client_id,
-                policy_no,
-                client_name,
-                address,
-                city,
-                attachment_path,
-                attachment_filename,
-                attachment_position,
-                created_at,tip
-            )
-            VALUES
-            (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND,'O'
-            )
-        """
+    def _is_not_in_transaction(err) -> bool:
+        return "not in transaction" in str(err).lower()
 
-        cur.execute(sql, (
-            job_id,
-            recipient,
-            subject,
-            message_id,
-            status,
-            error_message,
-            int(attachments_cnt),
-            client_id,
-            policy_no,
-            client_name,
-            address,
-            city,
-            attachment_path,
-            attachment_filename,
-            attachment_position,
-        ))
-
+    def _safe_commit():
+        # Informix (autocommit / non-logged database) веќе го commit-ира секој
+        # statement сам — explicit commit() тогаш нема што да затвори и фрла
+        # "Not in transaction". Тоа не значи дека INSERT-от не поминал.
         try:
-            cur.connection.commit()
+            conn.commit()
+        except Exception as e:
+            if not _is_not_in_transaction(e):
+                raise
+
+    def _safe_rollback():
+        try:
+            conn.rollback()
         except Exception:
             pass
 
-    except Exception as e:
-        print("[AUDIT][DB] ❌ Insert failed:", repr(e))
+    def _to_db_date(v):
+        # datum_do доаѓа како ISO string ("YYYY-MM-DD") или веќе date/datetime.
+        # jaydebeapi не знае автоматски да bind-ира Python datetime.date како
+        # параметар (setObject overload mismatch), а плаин string го фаќа
+        # локалниот date-format на Informix ("Input value is not valid").
+        # Затоа праќаме вистински java.sql.Date, чиј valueOf() очекува
+        # токму "yyyy-mm-dd" — независно од Informix locale.
+        if v is None or v == "":
+            return None
+        if isinstance(v, datetime.date):
+            d = v
+        else:
+            try:
+                d = datetime.datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+            except Exception:
+                return None
+        JavaDate = jpype.JClass("java.sql.Date")
+        return JavaDate.valueOf(d.strftime("%Y-%m-%d"))
+
+    datum_do = _to_db_date(datum_do)
+
+    try:
+        sql_full = """
+            INSERT INTO email_audit_log
+            (
+                job_id, recipient, subject, message_id, status, error_message, attachments_cnt,
+                client_id, policy_no, client_name, address, city, datum_do,
+                attachment_path, attachment_filename, attachment_position,
+                created_at, tip
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND, ?)
+        """
+        try:
+            cur.execute(sql_full, (
+                job_id, recipient, subject, message_id, status, error_message, int(attachments_cnt),
+                client_id, policy_no, client_name, address, city, datum_do,
+                attachment_path, attachment_filename, attachment_position,
+                tip,
+            ))
+            _safe_commit()
+        except Exception as full_err:
+            # Fallback: колоните сè уште не постојат во табелата — прави basic INSERT
+            # Треба да се изврши ALTER TABLE за да се додадат колоните (види CLAUDE.md)
+            print(f"[AUDIT] Full INSERT failed ({full_err}), trying basic INSERT...")
+            _safe_rollback()
+            sql_basic = """
+                INSERT INTO email_audit_log
+                    (job_id, recipient, subject, message_id, status, error_message, attachments_cnt, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND)
+            """
+            cur.execute(sql_basic, (
+                job_id, recipient, subject, message_id, status, error_message, int(attachments_cnt),
+            ))
+            _safe_commit()
+            raise Exception(
+                f"email_audit_log: basic INSERT (без client_id/policy_no/tip). "
+                f"Треба ALTER TABLE за полни колони. Причина: {full_err}"
+            )
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def save_mail_to_db(conn, client_id, recipient_email, file_path, file_name, file_content, file_size, status_id=1):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

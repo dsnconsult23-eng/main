@@ -23,7 +23,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from routers import Connection
-from .GeneratePDFOpomeni import generate_pdf
+from .GeneratePDFOpomeni import generate_pdf as generate_opomena_pdf
+from .GeneratePDFIzvestuvanje import generate_pdf as generate_izvestuvanje_pdf
 import pandas as pd
 import io
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -32,16 +33,18 @@ from pypdf import PdfWriter
 from pydantic import BaseModel
 from routers import SendMailLog 
 import json
+from auth.role_utils import has_any_role
+from auth.smtp_config import load_smtp_config_once
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 CHANNEL_MAP = {
-    "BANK": 33,
-    "DIRECT": 57,
+    "BANK": 62,
+    "DIRECT": 77,
     "AGENCY_COMP": 58,
-    "AGENTS": 77,
-    "BROKER_COMP": 78,
+    "AGENTS": 78,
+    "BROKER_COMP": 33,
     "PROMOTOR": 775
 }
 
@@ -52,6 +55,8 @@ def get_current_user(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    if not has_any_role(user, "izvestuvanja"):
+        raise HTTPException(status_code=403, detail="Access denied")
     return user
 
 # ===========================
@@ -61,6 +66,8 @@ def get_current_user_api(request: Request):
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if not has_any_role(user, "izvestuvanja"):
+        raise HTTPException(status_code=403, detail="Access denied")
     return user
 
 # ===========================
@@ -69,6 +76,7 @@ def get_current_user_api(request: Request):
 
 @router.get("/izvestuvanja", response_class=HTMLResponse)
 async def izvestuvanja_page(request: Request, user=Depends(get_current_user)):
+    policy_type_options = fetch_policy_type_options()
     return templates.TemplateResponse(
         "izvestuvanja.html",
         {
@@ -86,6 +94,7 @@ async def izvestuvanja_page(request: Request, user=Depends(get_current_user)):
             "date_from": "",
             "date_to": "",
             "op_message": None,
+            "policy_type_options": policy_type_options,
         }
     )
 
@@ -113,6 +122,40 @@ def get_cursor_from_osis():
     except Exception:
         return obj, None       # cursor, no connection
 
+
+def fetch_policy_type_options() -> List[str]:
+    sql = """
+        SELECT DISTINCT polisa_broj_cel[1,2]
+        FROM os_polisa
+        WHERE polisa_broj_cel IS NOT NULL
+        ORDER BY 1
+    """
+
+    try:
+        cur, conn = get_cursor_from_osis()
+        try:
+            cur.execute(sql)
+            rows = cur.fetchall()
+        finally:
+            try:
+                cur.close()
+            except Exception:
+                pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    except Exception as e:
+        print("Could not load policy type options:", e)
+        return []
+
+    return sorted({
+        str(row[0]).strip()
+        for row in (rows or [])
+        if row and str(row[0] or "").strip().isdigit() and len(str(row[0]).strip()) == 2
+    })
+
 # ===========================
 # Simple in-memory jobs store (shared for Izvestuvanja + Opomeni)
 # ===========================
@@ -129,51 +172,6 @@ class SendSelectedMailRequest(BaseModel):
     ids: list[str]
     job_id: Optional[str] = None
     test_email: Optional[str] = None
-
-# ===========================
-# SMTP settings (read once per job)
-# ===========================
-def get_smtp_settings():
-    sql = "SELECT key, value FROM adm_appsettings WHERE key LIKE 'smtp.%'"
-
-    cur, conn = get_cursor_from_osis()
-    try:
-        cur.execute(sql)
-        settings = {}
-        while True:
-            row = cur.fetchone()
-            if not row:
-                break
-            settings[str(row[0])] = row[1]
-        return settings
-    finally:
-        try:
-            cur.close()
-        except Exception:
-            pass
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-def load_smtp_config_once():
-    settings = get_smtp_settings()
-
-    sender_email = settings.get("smtp.fromaddress")
-    sender_username = settings.get("smtp.username")
-    sender_password = settings.get("smtp.password")
-
-    if not sender_email or not sender_username or not sender_password:
-        raise Exception("Missing SMTP credentials (smtp.fromaddress / smtp.username / smtp.password)")
-
-    return {
-        "sender_email": sender_email,
-        "sender_username": sender_username,
-        "sender_password": sender_password,
-        "smtp_host": "smtp.office365.com",
-        "smtp_port": 587
-    }
 
 # ===========================
 # Recipients (SQL unchanged)
@@ -285,19 +283,26 @@ def _audit_email_to_db(
     status: str,
     error_message: Optional[str],
     attachments_cnt: int,
+    tip: str = "I",
+    client_id: Optional[str] = None,
+    policy_no: Optional[str] = None,
+    client_name: Optional[str] = None,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
 ):
     results, OK = Connection.OSISinit()
     if not OK:
         print("[AUDIT][DB] ❌ No DB connection")
         return
 
-    cur = results  # кај тебе најчесто ова е cursor
+    cur = results
     try:
         sql = """
             INSERT INTO email_audit_log
-                (job_id, recipient, subject, message_id, status, error_message, attachments_cnt, created_at)
+                (job_id, recipient, subject, message_id, status, error_message, attachments_cnt,
+                 tip, client_id, policy_no, client_name, address, city, created_at)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT YEAR TO SECOND)
         """
         cur.execute(sql, (
             job_id,
@@ -307,6 +312,12 @@ def _audit_email_to_db(
             status,
             error_message,
             int(attachments_cnt),
+            tip,
+            client_id,
+            policy_no,
+            client_name,
+            address,
+            city,
         ))
 
         try:
@@ -579,6 +590,122 @@ async def job_status(request: Request, job_id: str, user=Depends(get_current_use
 OPOMENI_OUT_DIR = Path("/opt/siglife-reporting/UNIQA/opomeni")
 OPOMENI_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _cleanup_old_opomeni_dirs(base_dir: str, keep_days: int = 7) -> None:
+    """Delete dated subdirectories older than keep_days to prevent disk exhaustion."""
+    import shutil
+    from datetime import timedelta
+
+    cutoff = datetime.today().date() - timedelta(days=keep_days)
+    try:
+        for entry in os.scandir(base_dir):
+            if not entry.is_dir():
+                continue
+            try:
+                dir_date = datetime.strptime(entry.name, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if dir_date < cutoff:
+                shutil.rmtree(entry.path, ignore_errors=True)
+                print(f"Cleaned up old opomeni dir: {entry.path}")
+    except OSError:
+        pass
+
+
+def normalize_document_type(value: Optional[str]) -> str:
+    return "izvestuvanja" if str(value or "").strip().lower() == "izvestuvanja" else "opomeni"
+
+
+def get_document_labels(document_type: Optional[str]) -> dict:
+    doc_type = normalize_document_type(document_type)
+    if doc_type == "izvestuvanja":
+        return {
+            "type": doc_type,
+            "singular": "Известување",
+            "plural": "Известувања",
+            "subject": "Известување",
+            "merged_filename": "Site_Izvestuvanja.pdf",
+            "temp_prefix": "Izvestuvanje",
+            "excel_sheet": "Izvestuvanja",
+            "excel_filename": "izvestuvanja.xlsx",
+            "mail_intro": "Во прилог Ви испраќаме известување за неплатена премија за осигурување на живот.",
+        }
+
+    return {
+        "type": doc_type,
+        "singular": "Опомена",
+        "plural": "Опомени",
+        "subject": "Опомена",
+        "merged_filename": "Site_Opomeni.pdf",
+        "temp_prefix": "Opomena",
+        "excel_sheet": "Opomeni",
+        "excel_filename": "opomeni.xlsx",
+        "mail_intro": "Во прилог Ви испраќаме опомена за неплатена премија за осигурување на живот.",
+    }
+
+
+def get_cutoff_condition(cutoff_date_sql: str, document_type: Optional[str]) -> str:
+    doc_type = normalize_document_type(document_type)
+    if doc_type == "izvestuvanja":
+        return f"""
+DATE(x0.data_faktura) > {cutoff_date_sql}
+AND DATE(x0.data_faktura) <= DATE(ADD_MONTHS({cutoff_date_sql}, 1))
+""".strip()
+
+    return f"""
+{cutoff_date_sql} >= CASE
+    WHEN x5.otp_code IN ('КО','UL','РИ','РК')
+         THEN DATE(ADD_MONTHS(x0.data_faktura, 2))
+    ELSE DATE(ADD_MONTHS(x0.data_faktura, 5))
+END
+""".strip()
+
+
+def get_detail_invoice_condition(cutoff_date_sql: str, document_type: Optional[str]) -> str:
+    doc_type = normalize_document_type(document_type)
+    if doc_type == "izvestuvanja":
+        return f"DATE(f.data_faktura) <= DATE(ADD_MONTHS({cutoff_date_sql}, 1))"
+
+    return f"f.data_faktura < {cutoff_date_sql}"
+
+
+def get_current_invoice_condition(cutoff_date_sql: str, document_type: Optional[str]) -> str:
+    doc_type = normalize_document_type(document_type)
+    if doc_type == "izvestuvanja":
+        return f"""
+DATE(x.datum_faktura) > {cutoff_date_sql}
+AND DATE(x.datum_faktura) <= DATE(ADD_MONTHS({cutoff_date_sql}, 1))
+""".strip()
+
+    return "1 = 1"
+
+
+def get_detail_invoice_order(document_type: Optional[str]) -> str:
+    doc_type = normalize_document_type(document_type)
+    if doc_type == "izvestuvanja":
+        return "s.datum_faktura DESC, s.faktura DESC"
+
+    return "s.datum_faktura DESC, s.faktura DESC"
+
+
+def get_mail_status_condition(mail_status_filter: Optional[str]) -> str:
+    value = str(mail_status_filter or "all").strip().lower()
+    normalized = (
+        value.replace("-", "_")
+        .replace(" ", "_")
+        .replace("bez", "without")
+        .replace("so", "with")
+        .replace("mailovi", "mail")
+        .replace("mejl", "mail")
+    )
+
+    if normalized in ("without_mail", "no_mail", "without_email"):
+        return "AND (pc.email IS NULL OR TRIM(pc.email) = '')"
+    if normalized in ("with_mail", "has_mail", "with_email"):
+        return "AND (pc.email IS NOT NULL AND TRIM(pc.email) <> '')"
+    return ""
+
+
 def build_opomeni_pdf(
     pdf_path: Path,
     *,
@@ -626,24 +753,31 @@ def build_opomeni_pdf(
 def run_opomeni_job(
     job_id: str,
     *,
+    document_type: str,
     target_type: str,
     df: date,
     dt: date,
     policy_no: Optional[str],
     client_id: Optional[str],
+    mail_status_filter: Optional[str],
     sales_channels: Optional[List[str]],
+    policy_types: Optional[List[str]],
     user_name: str
 ):
     try:
-        _set_job(job_id, status="running", message="Се генерираат PDF опомени...")
+        labels = get_document_labels(document_type)
+        _set_job(job_id, status="running", message=f"Се генерираат PDF {labels['plural'].lower()}...")
 
         result = generate_pdfs_izvestuvanje_all(
+            document_type=document_type,
             date_from=df.isoformat(),
             date_to=dt.isoformat(),
             target_type=target_type,
             sales_channels=sales_channels,
+            policy_types=policy_types,
             policy_no=policy_no,
             client_id=client_id,
+            mail_status_filter=mail_status_filter,
             save_folder=str(OPOMENI_OUT_DIR)
         )
 
@@ -661,22 +795,24 @@ def run_opomeni_job(
         _set_job(
             job_id,
             status="ready",
-            message=f"Генерирани {generated} PDF опомени.",
+            message=f"Генерирани {generated} PDF {labels['plural'].lower()}.",
             generated=generated,
             processed=processed,
             skipped=skipped,
             errors=errors,
             folder=folder,
             file_path=merged_pdf,
-            filename="Site_Opomeni.pdf",
+            filename=labels["merged_filename"],
+            document_type=labels["type"],
             items=items
         )
 
     except Exception as e:
+        labels = get_document_labels(document_type)
         _set_job(
             job_id,
             status="error",
-            message="Грешка при генерирање PDF опомени.",
+            message=f"Грешка при генерирање PDF {labels['plural'].lower()}.",
             last_error=str(e),
             trace=traceback.format_exc()
         )
@@ -691,15 +827,21 @@ async def opomeni_generate_async(
         form = await request.form()
 
         target_type = (form.get("target_type") or "all").strip()
+        document_type = normalize_document_type(form.get("opomeni_document_type"))
         date_from = (form.get("date_from") or "").strip()
         date_to = (form.get("date_to") or "").strip()
         policy_no = (form.get("policy_no") or "").strip() or None
         client_id = (form.get("client_id") or "").strip() or None
+        mail_status_filter = (form.get("mail_status_filter") or "all").strip()
+        print("mail_status_filter =", repr(mail_status_filter))
         format_ = (form.get("format") or "pdf").strip()
 
         sales_channels = form.getlist("sales_channels")
         if not sales_channels:
             sales_channels = None
+        policy_types = form.getlist("policy_types")
+        if not policy_types:
+            policy_types = None
 
         if not date_from:
             return JSONResponse({"ok": False, "error": "date_from is required"})
@@ -740,12 +882,15 @@ async def opomeni_generate_async(
             target=run_opomeni_job,
             kwargs=dict(
                 job_id=job_id,
+                document_type=document_type,
                 target_type=target_type,
                 df=df,
                 dt=dt,
                 policy_no=policy_no,
                 client_id=client_id,
+                mail_status_filter=mail_status_filter,
                 sales_channels=sales_channels,
+                policy_types=policy_types,
                 user_name=user_name
             ),
             daemon=True
@@ -795,23 +940,63 @@ def norm_client_type(target_type: str) -> str:
 
 def generate_pdfs_izvestuvanje_all(
     *,
+    document_type: str = "opomeni",
     date_from: str,
     date_to: str,
     target_type: str = "all",
     sales_channels: Optional[list[str]] = None,
+    policy_types: Optional[list[str]] = None,
     policy_no: Optional[str] = None,
     client_id: Optional[str] = None,
+    mail_status_filter: Optional[str] = None,
     save_folder: str = str(OPOMENI_OUT_DIR),
     limit: Optional[int] = None
 ) -> dict:
 
     print("========== START generate_pdfs_izvestuvanje_all ==========")
+    labels = get_document_labels(document_type)
 
     processed = 0
     generated = 0
     skipped = 0
     errors = 0
     items = []
+
+    def load_last_sent_map(policy_numbers: set[str]) -> dict[str, str]:
+        cleaned = sorted({str(x).strip() for x in policy_numbers if str(x or "").strip()})
+        if not cleaned:
+            return {}
+
+        audit_tip = "I" if labels["type"] == "izvestuvanja" else "O"
+        policy_numbers_sql = ",".join("'" + esc_sql(x) + "'" for x in cleaned)
+        sql_last_sent = f"""
+            SELECT
+                policy_no,
+                MAX(created_at) AS last_sent_at
+            FROM email_audit_log
+            WHERE status = 'SENT'
+              AND tip = '{audit_tip}'
+              AND policy_no IN ({policy_numbers_sql})
+            GROUP BY policy_no
+        """
+
+        last_sent_map = {}
+        try:
+            results_log, ok_log = Connection.OSISinit()
+            if not ok_log:
+                return {}
+
+            results_log.execute(sql_last_sent)
+            for row in results_log.fetchall():
+                policy_value = str(row[0] or "").strip()
+                last_sent_value = row[1]
+                if not policy_value or last_sent_value is None:
+                    continue
+                last_sent_map[policy_value] = str(last_sent_value).strip()
+        except Exception as e:
+            print("⚠️ Could not load last sent info:", e)
+
+        return last_sent_map
 
     # parse dates
     df = datetime.strptime(date_from, "%Y-%m-%d").date()
@@ -820,6 +1005,7 @@ def generate_pdfs_izvestuvanje_all(
     # Informix literal
     cutoff_date_sql = f"MDY({dt.month},{dt.day},{dt.year})"
     from_date_sql = f"MDY({df.month},{df.day},{df.year})"
+    cutoff_condition_sql = get_cutoff_condition(cutoff_date_sql, document_type)
 
     # client filter
     tt = norm_client_type(target_type)
@@ -837,11 +1023,13 @@ def generate_pdfs_izvestuvanje_all(
         if ids:
             channel_filter = f"AND x3.par_prod_kanalid IN ({','.join(ids)})"
 
+    policy_type_filter = build_policy_type_filter(policy_types, "x2.polisa_broj_cel")
+
     # policy filter
     policy_filter = ""
     if policy_no and policy_no.strip():
         pol = esc_sql(policy_no.strip())
-        policy_filter = f"AND x2.polisa_broj_cel = '{pol}'"
+        policy_filter = f"AND x2.polisa_broj_cel LIKE '{pol}%'"
 
     # client_id filter
     clientid_filter = ""
@@ -849,11 +1037,14 @@ def generate_pdfs_izvestuvanje_all(
         cid = esc_sql(str(client_id).strip())
         clientid_filter = f"AND pc.par_client = '{cid}'"
 
+    mail_status_condition = get_mail_status_condition(mail_status_filter)
+
     today_str = datetime.today().strftime("%Y-%m-%d")
     full_save_path = os.path.join(save_folder, today_str)
     os.makedirs(full_save_path, exist_ok=True)
+    _cleanup_old_opomeni_dirs(save_folder, keep_days=7)
 
-    merged_file_name = "Site_Opomeni.pdf"
+    merged_file_name = labels["merged_filename"]
     merged_full_path = os.path.join(full_save_path, merged_file_name)
 
     print("Saving PDFs to:", full_save_path)
@@ -891,14 +1082,12 @@ def generate_pdfs_izvestuvanje_all(
           AND x1.os_zbiren_aneksid IS NULL
           AND x3.skadenca_datum_do > TODAY
           
-          AND {cutoff_date_sql} >= CASE
-              WHEN x5.otp_code IN ('КО','UL','РИ','РК')
-                   THEN DATE(ADD_MONTHS(x0.data_faktura, 2))
-              ELSE DATE(ADD_MONTHS(x0.data_faktura, 5))
-          END
+          AND {cutoff_condition_sql}
 
           {client_filter}
+          {mail_status_condition}
           {channel_filter}
+          {policy_type_filter}
           {policy_filter}
           {clientid_filter}
     ),
@@ -1014,6 +1203,10 @@ polisa_info AS (
 
         client_ids_sql = ",".join(str(x) for x in sorted(client_ids))
         policy_numbers_sql = ",".join("'" + x + "'" for x in sorted(policy_numbers))
+        detail_invoice_condition_sql = get_detail_invoice_condition(cutoff_date_sql, document_type)
+        detail_current_invoice_condition_sql = get_current_invoice_condition(cutoff_date_sql, document_type)
+        detail_invoice_order_sql = get_detail_invoice_order(document_type)
+        detail_due_date_sql = "x.datum_faktura" if labels["type"] == "izvestuvanja" else "x.datum_valuta"
 
         print(policy_numbers_sql)
         # policy_numbers_sql = ",".join(f"'{x.replace(\"'\", \"''\")}'" for x in sorted(policy_numbers))
@@ -1051,10 +1244,10 @@ polisa_info AS (
                 ON p.os_polisaid = a.os_polisaid
             JOIN viki.os_ponuda o
                 ON o.os_ponudaid = p.os_ponudaid
-            WHERE p.status_polisa = 'K'
+            WHERE p.status_polisa = 'K' and NVL(f.f_rs,'R') <> 'N'
               AND a.par_clientid IN ({client_ids_sql})
               AND p.polisa_broj_cel IN ({policy_numbers_sql})
-              AND f.data_faktura < {cutoff_date_sql} 
+              AND {detail_invoice_condition_sql}
         ),
 
         nbf2 AS
@@ -1164,7 +1357,7 @@ polisa_info AS (
                  ROW_NUMBER() OVER
                  (
                      PARTITION BY s.polisa_broj
-                     ORDER BY s.datum_faktura DESC, s.faktura DESC
+                     ORDER BY {detail_invoice_order_sql}
                  ) AS rn_last
              FROM sx s
          ),
@@ -1194,7 +1387,7 @@ polisa_info AS (
              client_adresa,
              client_post AS client_grad,
              polisa_broj AS polisa_number,
-             datum_valuta AS due_date,
+             {detail_due_date_sql} AS due_date,
              iznos AS premium_amount,
              naplata AS paid_premium,
              koja_godina AS godina,
@@ -1203,6 +1396,13 @@ polisa_info AS (
              ROUND((kum_iznos - kum_naplata) - (iznos - naplata), 2) AS unpaid_premium,
              valuta,
              ROUND((kum_iznos - kum_naplata), 2) AS vk_premija,
+             CASE
+                 WHEN br_rati = 12 THEN 'месечно'
+                 WHEN br_rati = 4 THEN 'квартално'
+                 WHEN br_rati = 2 THEN 'полугодишно'
+                 WHEN br_rati = 1 THEN 'годишно'
+                 ELSE 'месечно'
+             END AS nacin_plakanje,
              par_clientid,
              faktura,
              email,
@@ -1210,6 +1410,7 @@ polisa_info AS (
          FROM x join  polisa_info pi on x.polisa_broj=pi.polisa_broj_cel
           where pi.status_polisa='K'
          and rn_last = 1
+           AND {detail_current_invoice_condition_sql}
            AND (kum_iznos - kum_naplata) > 0
          ORDER BY client_name, polisa_broj
         """
@@ -1265,6 +1466,7 @@ polisa_info AS (
                     unpaid_premium,
                     valuta,
                     vk_premija,
+                    nacin_plakanje,
                     par_clientid,
                     faktura,
                     email,
@@ -1274,7 +1476,7 @@ polisa_info AS (
                 print("Processing PDF:", klient_faktura)
 
                 safe_faktura = str(faktura).replace("/", "-").replace("\\", "-")
-                temp_file_name = f"Opomena_{par_clientid}_{safe_faktura}.pdf"
+                temp_file_name = f"{labels['temp_prefix']}_{par_clientid}_{safe_faktura}.pdf"
                 temp_full_path = os.path.join(full_save_path, temp_file_name)
 
                 premium_amount = premium_amount or 0
@@ -1284,23 +1486,43 @@ polisa_info AS (
 
                 balance = premium_amount - paid_premium
 
-                generate_pdf(
-                    temp_full_path,
-                    client_name,
-                    client_adresa,
-                    client_grad,
-                    polisa_number,
-                    due_date,
-                    premium_amount,
-                    paid_premium,
-                    balance,
-                    godina,
-                    rata,
-                    period,
-                    unpaid_premium,
-                    vk_premija,
-                    valuta
-                )
+                if labels["type"] == "izvestuvanja":
+                    generate_izvestuvanje_pdf(
+                        temp_full_path,
+                        client_name,
+                        client_adresa,
+                        client_grad,
+                        polisa_number,
+                        due_date,
+                        premium_amount,
+                        paid_premium,
+                        balance,
+                        godina,
+                        rata,
+                        period,
+                        unpaid_premium,
+                        vk_premija,
+                        valuta,
+                        nacin_plakanje
+                    )
+                else:
+                    generate_opomena_pdf(
+                        temp_full_path,
+                        client_name,
+                        client_adresa,
+                        client_grad,
+                        polisa_number,
+                        due_date,
+                        premium_amount,
+                        paid_premium,
+                        balance,
+                        godina,
+                        rata,
+                        period,
+                        unpaid_premium,
+                        vk_premija,
+                        valuta
+                    )
 
                 temp_pdf_files.append(temp_full_path)
                 generated += 1
@@ -1309,10 +1531,14 @@ polisa_info AS (
                 item_id = str(uuid4())
                 items.append({
                     "id": item_id,
+                    "document_type": labels["type"],
                     "client_id": str(par_clientid or ""),
                     "client_name": client_name or "",
                     "policy_no": polisa_number or "",
+                    "address": client_adresa or "",
+                    "city": client_grad or "",
                     "email": email or "",
+                    "datum_do": date_to,
                     "pdf_path": temp_full_path,
                     "pdf_url": f"/siglife-report/opomeni/item-pdf/{item_id}",
                     "send_ready": bool(email and str(email).strip())
@@ -1344,6 +1570,15 @@ polisa_info AS (
         else:
             print("⚠️ No PDFs generated to merge.")
 
+        last_sent_map = load_last_sent_map(policy_numbers)
+        if last_sent_map:
+            for item in items:
+                policy_value = str(item.get("policy_no") or "").strip()
+                item["last_sent_at"] = last_sent_map.get(policy_value, "")
+        else:
+            for item in items:
+                item["last_sent_at"] = ""
+
     except Exception as e:
         print("❌ MAIN ERROR:", e)
         errors += 1
@@ -1367,14 +1602,35 @@ def esc_sql(s: str) -> str:
     return s.replace("'", "''")
 
 
+def build_policy_type_filter(policy_types: Optional[List[str]], column: str) -> str:
+    selected = {
+        str(value).strip()
+        for value in (policy_types or [])
+        if str(value).strip().isdigit() and len(str(value).strip()) == 2
+    }
+    if not selected:
+        return ""
+
+    conditions = [
+        f"{column} LIKE '{esc_sql(value)}/%'"
+        for value in sorted(selected)
+    ]
+
+    return f"AND ({' OR '.join(conditions)})" if conditions else ""
+
+
 @router.post("/opomeni/export-excel")
 async def export_opomeni_excel(
+    opomeni_document_type: str = Form("opomeni"),
     target_type: str = Form("all"),
     sales_channels: list[str] = Form(None),
+    policy_types: list[str] = Form(None),
     policy_no: str = Form(None),
     client_id: str = Form(None),
+    mail_status_filter: str = Form("all"),
     date_to: str = Form(None)
 ):
+    labels = get_document_labels(opomeni_document_type)
 
     if not date_to:
         date_to = date.today().isoformat()
@@ -1393,9 +1649,11 @@ async def export_opomeni_excel(
         if ids:
             channel_filter = f"AND x3.par_prod_kanalid IN ({','.join(ids)})"
 
+    policy_type_filter = build_policy_type_filter(policy_types, "x2.polisa_broj_cel")
+
     if policy_no and policy_no.strip():
         pol = esc_sql(policy_no.strip())
-        policy_filter = f"AND x2.polisa_broj_cel = '{pol}'"
+        policy_filter = f"AND x2.polisa_broj_cel LIKE '{pol}%'"
     else:
         policy_filter = ""
 
@@ -1404,6 +1662,8 @@ async def export_opomeni_excel(
         clientid_filter = f"AND pc.par_client = '{cid}'"
     else:
         clientid_filter = ""
+
+    mail_status_condition = get_mail_status_condition(mail_status_filter)
     
 
     if not date_to:
@@ -1411,6 +1671,7 @@ async def export_opomeni_excel(
 
     y, m, d = date_to.split("-")
     cutoff_date_sql = f"MDY({int(m)},{int(d)},{int(y)})"   # пример MDY(2,28,2026)
+    cutoff_condition_sql = get_cutoff_condition(cutoff_date_sql, opomeni_document_type)
         
 
     sql = f"""
@@ -1440,14 +1701,12 @@ async def export_opomeni_excel(
           AND x1.os_zbiren_aneksid IS NULL
           AND x3.skadenca_datum_do > TODAY
 
-          AND {cutoff_date_sql}  >= CASE
-                WHEN x5.otp_code IN ('КО','UL','РИ','РК')
-                     THEN DATE(ADD_MONTHS(x0.data_faktura,2))
-                ELSE DATE(ADD_MONTHS(x0.data_faktura,5))
-          END
+          AND {cutoff_condition_sql}
 
           {client_filter}
+          {mail_status_condition}
           {channel_filter}
+          {policy_type_filter}
           {policy_filter}
           {clientid_filter}
     ),
@@ -1501,14 +1760,43 @@ async def export_opomeni_excel(
 
     df = pd.DataFrame(rows, columns=cols)
 
+    if not df.empty:
+        email_clean = df["email"].fillna("").astype(str).str.strip()
+        address_clean = df["adresa_grad"].fillna("").astype(str).str.strip()
+
+        has_email = email_clean != ""
+        address_has_at = address_clean.str.contains("@", regex=False)
+        has_postal_address = address_clean != ""
+
+        # 1) no email
+        # 2) postal address + email
+        # 3) notification address contains email + email field exists
+        # 4) everything else goes last
+        df["_sort_group"] = 4
+        df.loc[~has_email, "_sort_group"] = 1
+        df.loc[has_email & has_postal_address & ~address_has_at, "_sort_group"] = 2
+        df.loc[has_email & address_has_at, "_sort_group"] = 3
+
+        df["_policy_sort_num"] = pd.to_numeric(
+            df["polisa_broj"].fillna("").astype(str).str.replace(r"\D", "", regex=True),
+            errors="coerce"
+        )
+        df["_policy_sort_text"] = df["polisa_broj"].fillna("").astype(str).str.strip()
+
+        df = df.sort_values(
+            by=["_sort_group", "_policy_sort_num", "_policy_sort_text"],
+            ascending=[True, True, True],
+            na_position="last"
+        ).drop(columns=["_sort_group", "_policy_sort_num", "_policy_sort_text"])
+
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
 
-        df.to_excel(writer, index=False, sheet_name="Opomeni")
+        df.to_excel(writer, index=False, sheet_name=labels["excel_sheet"])
 
         wb = writer.book
-        ws = writer.sheets["Opomeni"]
+        ws = writer.sheets[labels["excel_sheet"]]
 
         # bold header
         for cell in ws[1]:
@@ -1542,7 +1830,7 @@ async def export_opomeni_excel(
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=opomeni.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename={labels['excel_filename']}"}
     )
 
 @router.get("/opomeni/status/{job_id}")
@@ -1609,6 +1897,7 @@ async def send_selected_opomeni_mail(
 
         sent_count = 0
         failed_count = 0
+        all_audit_warnings = []
 
         test_email = (payload.test_email or "").strip()
 
@@ -1626,8 +1915,9 @@ async def send_selected_opomeni_mail(
 
         for item in selected_items:
             try:
-                # real_email = (item.get("email") or "").strip()
-                real_email='svconsult40@gmail.com'
+                labels = get_document_labels(item.get("document_type"))
+                real_email = (item.get("email") or "").strip()
+                # real_email='svconsult40@gmail.com'
                 email = test_email if test_email else real_email
 
                 pdf_path = item.get("pdf_path")
@@ -1636,6 +1926,7 @@ async def send_selected_opomeni_mail(
                 client_id = item.get("client_id")
                 address = item.get("address")
                 city = item.get("city")
+                datum_do = item.get("datum_do")
 
                 print("test_email =", test_email)
                 print("real_email =", real_email)
@@ -1649,7 +1940,7 @@ async def send_selected_opomeni_mail(
                     failed_count += 1
                     continue
 
-                subject = f"Опомена за полиса {policy_no}"
+                subject = f"{labels['subject']} за полиса {policy_no}"
                 polisa_number = str(policy_no or "")
 
                 loan_section = ""
@@ -1738,6 +2029,10 @@ async def send_selected_opomeni_mail(
                 </body>
                 </html>
                 """
+                html_body = html_body.replace(
+                    "Во прилог Ви испраќаме опомена за неплатена премија за осигурување на живот.",
+                    labels["mail_intro"]
+                )
 
                 recipients = [
                     {
@@ -1747,11 +2042,13 @@ async def send_selected_opomeni_mail(
                         "client_name": client_name,
                         "address": address,
                         "city": city,
+                        "datum_do": datum_do,
+                        "document_type": labels["type"],
                         "pdf_paths": [pdf_path]
                     }
                 ]
 
-                sent, failed = SendMailLog.send_many_emails_with_logo_and_db_log(
+                sent, failed, audit_warns = SendMailLog.send_many_emails_with_logo_and_db_log(
                     recipients=recipients,
                     subject=subject,
                     html_body=html_body,
@@ -1761,17 +2058,25 @@ async def send_selected_opomeni_mail(
 
                 sent_count += sent
                 failed_count += failed
+                all_audit_warnings.extend(audit_warns)
 
             except Exception as e:
                 print("send_selected_opomeni_mail error:", e)
                 failed_count += 1
 
-        return JSONResponse({
+        result = {
             "ok": True,
             "message": "Испраќањето е завршено.",
             "sent_count": sent_count,
-            "failed_count": failed_count
-        })
+            "failed_count": failed_count,
+        }
+        if all_audit_warnings:
+            result["audit_warning"] = (
+                "Емаилите се пратени, но логот во email_audit_log не е снимен. "
+                "Треба ALTER TABLE за да се додадат колоните. "
+                f"Детали: {all_audit_warnings[0]}"
+            )
+        return JSONResponse(result)
 
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -1784,8 +2089,9 @@ async def export_sent_emails_excel(
     try:
         form = await request.form()
 
-        date_from = (form.get("date_from") or "").strip()
-        date_to = (form.get("date_to") or "").strip()
+        date_from = (form.get("sent_date_from") or "").strip()
+        date_to = (form.get("sent_date_to") or "").strip()
+        target_type = (form.get("target_type") or "all").strip()
 
         print("date_from =", repr(date_from))
         print("date_to   =", repr(date_to))
@@ -1812,19 +2118,41 @@ async def export_sent_emails_excel(
         from datetime import timedelta
         dt_next = dt + timedelta(days=1)
 
+        client_type_filter = ""
+        if target_type == "physical":
+            client_type_filter = """
+              AND EXISTS (
+                  SELECT 1
+                  FROM vesna.par_client pc
+                  WHERE pc.par_clientid = l.client_id
+                    AND pc.client_tip_pf = 'F'
+              )
+            """
+        elif target_type == "legal":
+            client_type_filter = """
+              AND EXISTS (
+                  SELECT 1
+                  FROM vesna.par_client pc
+                  WHERE pc.par_clientid = l.client_id
+                    AND pc.client_tip_pf = 'P'
+              )
+            """
+
         sql = f"""
             SELECT
-                policy_no,
-                client_id,
-                client_name,
-                address,
-                city,
-                recipient AS email
-            FROM email_audit_log
-            WHERE status = 'SENT' and tip='O'
-              AND created_at >= MDY({df.month},{df.day},{df.year})
-              AND created_at <  MDY({dt_next.month},{dt_next.day},{dt_next.year})
-            ORDER BY created_at DESC
+                l.policy_no,
+                l.client_id,
+                l.client_name,
+                l.address,
+                l.city,
+                l.recipient AS email,
+                l.created_at AS sent_at
+            FROM email_audit_log l
+            WHERE l.status = 'SENT' and l.tip='O'
+              AND l.created_at >= MDY({df.month},{df.day},{df.year})
+              AND l.created_at <  MDY({dt_next.month},{dt_next.day},{dt_next.year})
+              {client_type_filter}
+            ORDER BY l.created_at DESC
         """
 
         print(sql)
@@ -1846,7 +2174,7 @@ async def export_sent_emails_excel(
                     pass
 
         df_excel = pd.DataFrame(rows, columns=cols if rows else [
-            "policy_no", "client_id", "client_name", "address", "city", "email"
+            "policy_no", "client_id", "client_name", "address", "city", "email", "sent_at"
         ])
 
         df_excel = df_excel.rename(columns={
@@ -1855,7 +2183,8 @@ async def export_sent_emails_excel(
             "client_name": "Име и презиме",
             "address": "Адреса на известување",
             "city": "Град",
-            "email": "Меил"
+            "email": "Меил",
+            "sent_at": "Датум на испраќање"
         })
 
         output = io.BytesIO()
@@ -1921,6 +2250,7 @@ async def send_opomeni_kibs_test(
 
         for item in selected_items:
             try:
+                labels = get_document_labels(item.get("document_type"))
                 pdf_path = item.get("pdf_path")
                 email = item.get("email")
                 client_name = item.get("client_name")
@@ -1928,6 +2258,7 @@ async def send_opomeni_kibs_test(
                 policy_no = item.get("policy_no")
                 address = item.get("address")
                 city = item.get("city")
+                audit_subject = f"{labels['subject']} за полиса {policy_no or ''}"
 
                 if not pdf_path or not os.path.exists(pdf_path):
                     failed_count += 1
@@ -1935,7 +2266,7 @@ async def send_opomeni_kibs_test(
                     _audit_kibs_to_db(
                         job_id=job_id,
                         recipient=email or "",
-                        subject=f"Опомена за полиса {policy_no or ''}",
+                        subject=audit_subject,
                         status="FAILED",
                         error_message="PDF не постои",
                         client_id=client_id,
@@ -1953,7 +2284,7 @@ async def send_opomeni_kibs_test(
                 with open(pdf_path, "rb") as f:
                     pdf_bytes = f.read()
 
-                subject = f"Опомена за полиса {policy_no}"
+                subject = audit_subject
                 url = "https://splus-testapi.kibs.com.mk/v4/workflow/create"
 
                 # според документацијата SignPlus REST API користи Basic HTTP auth
@@ -1973,6 +2304,8 @@ async def send_opomeni_kibs_test(
                         }
                     ]
                 }
+
+                data_json["messageToAllSigners"] = labels["subject"]
 
                 files = {
                     "file": (os.path.basename(pdf_path), pdf_bytes, "application/pdf")
@@ -2046,7 +2379,7 @@ async def send_opomeni_kibs_test(
                     _audit_kibs_to_db(
                         job_id=job_id,
                         recipient=item.get("email") or "",
-                        subject=f"Опомена за полиса {item.get('policy_no') or ''}",
+                        subject=f"{get_document_labels(item.get('document_type'))['subject']} за полиса {item.get('policy_no') or ''}",
                         status="FAILED",
                         error_message=str(e),
                         client_id=item.get("client_id"),

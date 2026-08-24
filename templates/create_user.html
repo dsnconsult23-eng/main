@@ -33,14 +33,18 @@
     </div>
 
     <div style="margin-bottom: 1rem;">
-      <label for="role_name" style="display:block; font-weight:600; margin-bottom:0.4rem;">Улога *</label>
-      <select id="role_name" name="role_name"
-              style="width:100%; padding:0.65rem; border:1px solid #ccc; border-radius:6px;">
-        <option value="admin">admin</option>
-        <option value="aml">aml</option>
-        <option value="izvestuvanja">izvestuvanja</option>
-        <option value="finance">finance</option>
-      </select>
+      <label style="display:block; font-weight:600; margin-bottom:0.4rem;">Улоги *</label>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:0.55rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; background:#fafafa;">
+        {% for role_value, role_label in role_options %}
+        <label style="display:flex; align-items:center; gap:0.55rem; font-weight:500;">
+          <input type="checkbox" name="role_name" value="{{ role_value }}">
+          {{ role_label }}
+        </label>
+        {% endfor %}
+      </div>
+      <small style="display:block; margin-top:0.45rem; color:#607080;">
+        Може да се изберат повеќе улоги за истиот корисник.
+      </small>
     </div>
 
     <div style="margin-bottom: 1.2rem;">

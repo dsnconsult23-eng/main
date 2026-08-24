@@ -1,0 +1,10 @@
+2026-07-23 | UPDATE viki.fin_stavka SET f_ko_po = NULL
+Filter: f_ko_po = '1' AND datum = MDY(8,1,2026) AND NOT EXISTS (
+  SELECT 1 FROM viki.fin_stavka p
+  WHERE p.os_aneks_fakturaid = viki.fin_stavka.os_aneks_fakturaid
+    AND p.iznos_p IS NOT NULL
+)
+Before: 447
+Updated: 447
+Independent verification: 0 matching rows remain with f_ko_po = '1'
+Connection behavior: Informix/JDBC auto-committed the UPDATE; explicit commit returned "Not in transaction".

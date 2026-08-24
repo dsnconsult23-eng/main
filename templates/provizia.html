@@ -4,19 +4,135 @@
 
 {% block content %}
 <style>
-  .panel { background:#eceff1; border-radius:8px; padding:1.5rem 2rem;
-           margin-bottom:2rem; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
-  .panel.gray { background:#d0d4d8; }
-  .panel h2 { margin-bottom:1rem; color:#2c3e50; }
-  .form-row { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem; }
-  .form-row > * { flex:1 1 180px; min-width:150px; }
-  .btn-primary { padding:.5rem 1rem; border:none; border-radius:4px;
-                 background:#3498db; color:#fff; cursor:pointer; }
-  .btn-primary:hover { background:#2980b9; }
-  .result { margin-top:.8rem; font-weight:600; }
-  input[type="search"], select { padding:.45rem; border:1px solid #ccc; border-radius:4px; }
+  .commission-page { display:grid; gap:1.25rem; }
+  .panel { background:#fff; border:1px solid #dbe3ea; border-radius:8px; padding:1.25rem;
+           margin-bottom:0; box-shadow:0 8px 24px rgba(44,62,80,0.08); }
+  .panel.gray { background:#f8fafc; }
+  .panel-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;
+                  padding-bottom:1rem; margin-bottom:1rem; border-bottom:1px solid #e7edf3; }
+  .panel h2 { margin:0 0 1rem; padding-bottom:1rem; border-bottom:1px solid #e7edf3;
+              color:#203040; font-size:1.25rem; font-weight:700; }
+  .section-label { margin:1rem 0 .55rem; color:#607080; font-size:.78rem; font-weight:700;
+                   letter-spacing:.04em; text-transform:uppercase; }
+  .form-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+              gap:.85rem; margin-bottom:.8rem; }
+  .form-row:has(.btn-primary) { display:flex; flex-wrap:wrap; gap:.65rem; margin-top:.75rem; }
+  .action-row { display:flex; flex-wrap:wrap; gap:.65rem; margin-top:.75rem; }
+  .btn-primary { min-height:38px; padding:.55rem .85rem; border:1px solid #2c7db5; border-radius:6px;
+                 background:#3498db; color:#fff; cursor:pointer; font-weight:700;
+                 transition:background .18s ease, border-color .18s ease, transform .18s ease; }
+  .btn-primary:hover { background:#287fb9; border-color:#236f9f; transform:translateY(-1px); }
+  .btn-primary.report { background:#176b5d; border-color:#145f53; }
+  .btn-primary.report:hover { background:#12564b; border-color:#104d43; }
+  .button-with-help { display:inline-flex; align-items:center; gap:.4rem; margin:.35rem .35rem .35rem 0; }
+  .help-tip { position:relative; display:inline-flex; align-items:center; justify-content:center;
+              width:22px; height:22px; border:1px solid #9fb1bf; border-radius:50%;
+              background:#fff; color:#25394d; font-weight:700; cursor:help; }
+  .help-tip:focus { outline:3px solid rgba(52,152,219,.18); outline-offset:2px; }
+  .help-tip .help-popover { display:none; position:absolute; z-index:20; left:50%; bottom:calc(100% + 8px);
+                            transform:translateX(-50%); width:min(320px, 82vw); padding:.75rem .85rem;
+                            border:1px solid #c8d3dc; border-radius:6px; background:#fff; color:#25394d;
+                            box-shadow:0 10px 28px rgba(44,62,80,.16); font-size:.82rem; font-weight:500;
+                            line-height:1.35; text-align:left; }
+  .help-tip:hover .help-popover, .help-tip:focus .help-popover { display:block; }
+  .help-popover strong { display:block; margin-bottom:.35rem; font-size:.85rem; }
+  .help-popover span { display:block; margin-top:.25rem; }
+  .dashboard-panel { padding:0; overflow:hidden; border-color:#9bb9d2; background:#d8e8f6; }
+  .dashboard-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem;
+                       padding:.75rem 1rem; margin:0; background:#0f4f8f; border-bottom:4px solid #89bde3; }
+  .dashboard-toolbar h2 { margin:0; padding:0; border:0; color:#fff; font-size:1.25rem; letter-spacing:.02em; }
+  .dashboard-layout { display:grid; grid-template-columns:150px 1fr 150px; gap:.7rem; padding:.75rem; }
+  .dashboard-main { min-width:0; }
+  .dashboard-slicer { border:1px solid #9bb9d2; border-radius:6px; background:#f7fbff; padding:.55rem; align-self:start; }
+  .slicer-title { background:#1f6fb2; color:#fff; border-radius:4px; padding:.35rem .45rem; font-size:.75rem;
+                  font-weight:800; margin-bottom:.45rem; text-align:center; }
+  .slicer-chip { display:block; width:100%; min-height:28px; margin:.25rem 0; border:1px solid #b8cfe2; border-radius:4px;
+                 background:#e7f2fb; color:#1b4d75; font-size:.75rem; font-weight:700; text-align:center; padding:.32rem; }
+  .dashboard-tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:.35rem; margin-bottom:.65rem; }
+  .dashboard-tab { min-height:34px; padding:.42rem .5rem; border:1px solid #8fb8d8; border-radius:6px 6px 0 0;
+                   background:#edf6fc; color:#173f5f; font-size:.78rem; font-weight:800; cursor:pointer; }
+  .dashboard-tab.is-active { background:#1f6fb2; border-color:#15598f; color:#fff; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(6, minmax(120px, 1fr)); gap:.55rem; margin-bottom:.75rem; }
+  .kpi-card { border:1px solid #95b8d4; border-radius:6px; background:#fff; padding:.7rem; min-height:86px;
+              box-shadow:inset 0 4px 0 #1f6fb2, 0 5px 12px rgba(31,111,178,.12); text-align:center; }
+  .kpi-label { color:#43657d; font-size:.68rem; font-weight:800; text-transform:uppercase; }
+  .kpi-value { color:#0f4f8f; font-size:1.28rem; font-weight:900; margin-top:.35rem; }
+  .dashboard-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:.85rem; }
+  .dash-box { border:1px solid #9bb9d2; border-radius:6px; background:#fff; padding:.75rem; min-height:280px; overflow:hidden;
+              box-shadow:0 6px 14px rgba(20,76,120,.10); }
+  .dash-box h3 { margin:-.75rem -.75rem .65rem; padding:.45rem .65rem; font-size:.88rem; color:#fff; background:#1f6fb2; }
+  .chart-svg { width:100%; height:220px; display:block; }
+  .dash-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+  .dash-table th, .dash-table td { padding:.45rem .4rem; border-bottom:1px solid #eef2f6; text-align:left; }
+  .dash-table th { color:#607080; font-size:.72rem; text-transform:uppercase; }
+  .dashboard-view { display:none; }
+  .dashboard-view.is-active { display:block; }
+  @media (max-width:980px) {
+    .dashboard-layout { grid-template-columns:1fr; }
+    .dashboard-grid { grid-template-columns:1fr; }
+    .kpi-grid { grid-template-columns:repeat(auto-fit, minmax(145px, 1fr)); }
+    .dashboard-tabs { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
+  }
+  .btn-primary.secondary { background:#fff; border-color:#b8c7d4; color:#25394d; }
+  .btn-primary.secondary:hover { background:#eef5fb; border-color:#8eadc8; }
+  .panel > .btn-primary, .button-with-help > .btn-primary { margin:.35rem .35rem .35rem 0; background:#fff; border-color:#b8c7d4; color:#25394d; }
+  .panel > .btn-primary:hover { background:#eef5fb; border-color:#8eadc8; }
+  .panel > .btn-primary.report, .button-with-help > .btn-primary.report { background:#176b5d; border-color:#145f53; color:#fff; }
+  .panel > .btn-primary.report:hover, .button-with-help > .btn-primary.report:hover { background:#12564b; border-color:#104d43; }
+  .result { min-height:42px; margin-top:1rem; padding:.75rem .9rem; border:1px solid #dbe3ea;
+            border-radius:6px; background:#f8fafc; color:#405060; font-weight:700; }
+  input[type="search"], select { width:100%; min-height:40px; padding:.55rem .65rem;
+                                 border:1px solid #c8d3dc; border-radius:6px; background:#fff;
+                                 color:#243444; outline:none; }
+  input[type="search"]:focus, select:focus { border-color:#3498db; box-shadow:0 0 0 3px rgba(52,152,219,.14); }
+  .tree-shell { width:100%; height:620px; border:1px solid #d8e2ea; border-radius:8px;
+                background:#fff; overflow:hidden; }
+  #treeContainer { width:100% !important; height:620px !important; border:1px solid #d8e2ea !important;
+                   border-radius:8px; background:#fff; overflow:hidden; }
+  .is-hidden { display:none; }
+  .commission-modal { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center;
+                      padding:1rem; background:rgba(15,31,45,.58); }
+  .commission-modal.is-hidden { display:none; }
+  .commission-dialog { width:min(1180px, 96vw); max-height:90vh; overflow:auto; background:#fff;
+                       border-radius:10px; box-shadow:0 24px 70px rgba(0,0,0,.3); }
+  .commission-dialog-header { position:sticky; top:0; z-index:2; display:flex; align-items:center;
+                              justify-content:space-between; gap:1rem; padding:1rem 1.2rem;
+                              border-bottom:1px solid #dbe3ea; background:#fff; }
+  .commission-dialog-header h2 { margin:0; padding:0; border:0; }
+  .commission-dialog-body { padding:1rem 1.2rem 1.25rem; }
+  .commission-table-wrap { overflow:auto; max-height:62vh; border:1px solid #dbe3ea; border-radius:6px; }
+  .commission-table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:.84rem; }
+  .commission-table th, .commission-table td { padding:.5rem; border-bottom:1px solid #e8edf2; text-align:left; }
+  .commission-table th { position:sticky; top:0; background:#edf5fb; color:#28465e; }
+  .commission-table input[type="number"] { width:135px; min-height:34px; padding:.35rem .5rem;
+                                             border:1px solid #b8c7d4; border-radius:5px; }
+  .btn-danger { min-height:34px; padding:.4rem .65rem; border:1px solid #a92d2d; border-radius:5px;
+                background:#bd3434; color:#fff; cursor:pointer; font-weight:700; }
+  .btn-small { min-height:34px; padding:.4rem .65rem; }
+  #btnChangeCommission { background:#7b2d8b; border-color:#682477; color:#fff; }
+  #btnChangeCommission:hover { background:#682477; border-color:#561d63; color:#fff; }
+  #btnChangeCommission:focus { outline:3px solid rgba(123,45,139,.22); outline-offset:2px; }
+  .commission-message { min-height:24px; margin-bottom:.65rem; font-weight:700; }
+  .commission-filters { display:grid; grid-template-columns:repeat(4, minmax(130px, 1fr)) auto;
+                        gap:.6rem; margin-bottom:.75rem; align-items:end; }
+  .commission-filters label { color:#405060; font-size:.75rem; font-weight:700; }
+  .commission-filters input { display:block; width:100%; min-height:38px; margin-top:.25rem; padding:.45rem .55rem;
+                              box-sizing:border-box; border:1px solid #c8d3dc; border-radius:6px; }
+  .commission-bulk { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; padding:.65rem;
+                     margin-bottom:.75rem; border:1px solid #dbe3ea; border-radius:6px; background:#f8fafc; }
+  .commission-bulk input[type="number"] { width:160px; min-height:36px; padding:.4rem .5rem;
+                                           border:1px solid #b8c7d4; border-radius:5px; }
+  .commission-summary { margin-left:auto; color:#176b5d; font-weight:800; }
+  .commission-table tr.is-selected { background:#eef8f5; }
+  @media (max-width:760px) {
+    .panel-header { display:block; }
+    .action-row .btn-primary { width:100%; }
+    .commission-filters { grid-template-columns:1fr 1fr; }
+    .commission-summary { width:100%; margin-left:0; }
+  }
 </style>
 
+<div class="commission-page">
 <div class="panel">
   <h2>Провизија за агенти и промотори</h2>
   <div class="form-row">
@@ -26,6 +142,9 @@
   <div class="form-row">
     <input type="search" id="agentSearch" placeholder="Пребарaj агент…" />
     <select id="agentSel" size="1"><option value="">-- Избери агент --</option></select>
+  </div>
+  <div class="form-row">
+    <input type="search" id="polisaSearch" placeholder="Полиса за Multilevel преглед" />
   </div>
   <div class="form-row">
     <select id="regionSel"><option value="">-- Избери регион --</option></select>
@@ -39,13 +158,69 @@
   <button class="btn-primary" id="btnDownloadAll">Симни сите PDF</button>
   <button class="btn-primary" id="btnInkasoAg">Инкасо провизија</button>
   <button class="btn-primary" id="btnExportExcel">Експорт Excel</button>
+  <span class="button-with-help">
+    <button class="btn-primary report" id="btnMultilevelPregledi">Прегледи Multilevel</button>
+    <span class="help-tip" tabindex="0" aria-label="Инфо за Multilevel преглед">?
+      <span class="help-popover">
+        <strong>Multilevel преглед</strong>
+        <span>Месец + година: месечен преглед со споредба на бодови.</span>
+        <span>Само година: преглед за цела година.</span>
+        <span>Полиса или агент: преглед без задолжителен месец.</span>
+        <span>Фактурите се споредуваат преку os_aneks_fakturaid, а ако го нема - преку број на фактура.</span>
+      </span>
+    </span>
+  </span>
   <button class="btn-primary" id="btnAgentDrvo">Експорт на структура на агенти</button>
   <button class="btn-primary" id="btnShowTree">Прикажи структура</button>
   <button class="btn-primary" id="btnGenProv">Генерирај провизија</button>
+  <button class="btn-primary" id="btnChangeCommission" type="button"
+          title="Отвора преглед за пребарување по агент или полиса, промена на една или повеќе провизии и бришење избрани записи."
+          aria-label="Промена на провизија за агент или полиса">Промена на провизија за агент/полиса</button>
+  <button class="btn-primary" id="btnZbirenPregled" style="background:#1a5f7a;border-color:#154e66;">Генерирај Збирен преглед</button>
+  <button class="btn-primary report" id="btnOpenMlDashboard" style="display:none;">Отвори Multilevel Dashboard</button>
+  <button class="btn-primary" id="btnNePresmetani" style="display:none;background:#7b2d8b;border-color:#6a2479;">Непресметани полиси</button>
   <div class="result" id="resultAgents"></div>
 </div>
+<div class="commission-modal is-hidden" id="commissionModal" role="dialog" aria-modal="true" aria-labelledby="commissionModalTitle">
+  <div class="commission-dialog">
+    <div class="commission-dialog-header">
+      <h2 id="commissionModalTitle">Промена на провизија</h2>
+      <div>
+        <button class="btn-primary report" id="btnExportCommission" type="button">Експорт Excel</button>
+        <button class="btn-primary secondary" id="btnCloseCommission" type="button">Затвори</button>
+      </div>
+    </div>
+    <div class="commission-dialog-body">
+      <div class="commission-filters">
+        <label>Полиса<input id="commissionPolicyFilter" type="search" placeholder="Број на полиса"></label>
+        <label>Фактура<input id="commissionInvoiceFilter" type="search" placeholder="Број на фактура"></label>
+        <label>Година<input id="commissionYearFilter" type="number" min="0" max="100" placeholder="Година"></label>
+        <label>Рата<input id="commissionInstallmentFilter" type="number" min="0" max="1000" placeholder="Рата"></label>
+        <button class="btn-primary" id="btnFilterCommission" type="button">Пребарај</button>
+      </div>
+      <div class="commission-bulk">
+        <strong id="commissionSelectedCount">Избрани: 0</strong>
+        <input id="bulkCommissionAmount" type="number" step="0.01" placeholder="Нова провизија">
+        <button class="btn-primary" id="btnBulkSaveCommission" type="button" disabled>Промени избрани</button>
+        <button class="btn-danger" id="btnBulkDeleteCommission" type="button" disabled>Избриши избрани</button>
+        <span class="commission-summary" id="commissionTotal">Вкупна провизија: 0</span>
+      </div>
+      <div class="commission-message" id="commissionMessage"></div>
+      <div class="commission-table-wrap" id="commissionTable"></div>
+    </div>
+  </div>
+</div>
+<!-- Непресметани полиси панел -->
+<div class="panel gray is-hidden" id="nePresmetaniPanel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+    <h2 style="margin:0;padding:0;border:0;">Полиси без пресметана провизија</h2>
+    <button class="btn-primary secondary" onclick="document.getElementById('nePresmetaniPanel').classList.add('is-hidden')" style="min-height:30px;padding:.3rem .7rem;">Затвори</button>
+  </div>
+  <div id="nePresmetaniInfo" style="margin-bottom:.5rem;color:#607080;font-size:.85rem;"></div>
+  <div id="nePresmetaniTable" style="overflow-x:auto;"></div>
+</div>
 <!-- NEW PANEL: Agent Tree Visualization -->
-<div class="panel gray">
+<div class="panel gray is-hidden" id="agentTreePanel">
   <h2>Структура на агенти (веб визуелизација)</h2>
   <div id="treeContainer" style="width:100%; height:600px; border:1px solid #ccc;"></div>
 </div>
@@ -67,6 +242,7 @@
   <button class="btn-primary" id="btnSendMailBr">Прати маил за брокери</button>
   <div class="result" id="resultBrokers"></div>
 </div>
+</div>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -74,6 +250,211 @@ const apiGet  = url => fetch(`/siglife-report${url}`).then(r=>r.json());
 const apiPost = (url, body) => fetch(`/siglife-report${url}`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
 }).then(r=>r.json());
+const fmtNumber = value => new Intl.NumberFormat('mk-MK', { maximumFractionDigits: 0 }).format(Number(value || 0));
+const fmtMoney = value => new Intl.NumberFormat('mk-MK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value || 0));
+const fmtCommissionMoney = value => new Intl.NumberFormat('mk-MK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
+const fmtCommissionDate = value => {
+  if (!value) return '';
+  const text = String(value);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : text;
+};
+const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({
+  '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
+}[ch]));
+
+function refreshCommissionButton() {
+  $('btnChangeCommission').disabled = false;
+}
+
+async function commissionRequest(url, options = {}) {
+  const response = await fetch(`/siglife-report${url}`, options);
+  let data;
+  try { data = await response.json(); } catch (_) { data = {}; }
+  if (!response.ok) throw new Error(data.detail || data.message || `Грешка ${response.status}`);
+  return data;
+}
+
+function renderCommissionRows(rows) {
+  if (!rows.length) {
+    $('commissionTable').innerHTML = '<div style="padding:1rem;">Нема записи за избраниот критериум.</div>';
+    return;
+  }
+  rows = [...rows].sort((a, b) =>
+    String(a.polisa_broj || '').localeCompare(String(b.polisa_broj || ''), 'mk', {numeric:true}) ||
+    Number(a.godina || 0) - Number(b.godina || 0) ||
+    Number(a.rata || 0) - Number(b.rata || 0) ||
+    String(a.source || '').localeCompare(String(b.source || '')) ||
+    Number(a.record_id || 0) - Number(b.record_id || 0)
+  );
+  $('commissionTable').innerHTML = `<table class="commission-table"><thead><tr>
+    <th><input id="selectAllCommission" type="checkbox" aria-label="Избери ги сите записи"></th>
+    <th>Извор</th><th>Агент</th><th>Број на полиса</th><th>Фактура</th><th>Година</th>
+    <th>Рата</th><th>Датум на наплата</th><th>Износ на наплата</th><th>Износ на провизија</th><th>Тип книжење</th>
+    <th>Бод. записи</th><th>Бодови</th><th>Износ од бодови</th><th>Основица</th>
+    <th>Дуплирани</th><th>Сторно</th><th>Акции</th>
+  </tr></thead><tbody>${rows.map(row => {
+    const selectionKey = `${String(row.source || '').trim()}:${Number(row.record_id)}`;
+    return `<tr data-source="${escapeHtml(String(row.source || '').trim())}" data-id="${Number(row.record_id)}">
+    <td><input class="commission-select" type="checkbox" ${selectedCommissionKeys.has(selectionKey) ? 'checked' : ''} aria-label="Избери запис"></td>
+    <td>${row.source === 'agent' ? 'LC агент' : 'Промотор'}</td>
+    <td>${escapeHtml(row.agent_name)} (${escapeHtml(row.agent_id)})</td>
+    <td>${escapeHtml(row.polisa_broj)}</td><td>${escapeHtml(row.faktura)}</td>
+    <td>${escapeHtml(row.godina)}</td><td>${escapeHtml(row.rata)}</td>
+    <td>${escapeHtml(fmtCommissionDate(row.dat_naplata))}</td>
+    <td>${escapeHtml(fmtCommissionMoney(row.iznos_naplata))}</td>
+    <td><input class="commission-amount" type="number" step="0.01" value="${escapeHtml(row.iznos_provizija)}" aria-label="Износ на провизија"></td>
+    <td>${escapeHtml(row.tip_knizenje)}</td>
+    <td>${escapeHtml(row.broj_bodovni_zapisi)}</td><td>${escapeHtml(row.br_bodovi)}</td>
+    <td>${escapeHtml(row.iznos_bod)}</td><td>${escapeHtml(row.osnovica_bod)}</td>
+    <td>${escapeHtml(row.duplirani_bodovi)}</td><td>${escapeHtml(row.storno_bodovi)}</td>
+    <td><button class="btn-primary btn-small save-commission" type="button">Зачувај</button>
+        <button class="btn-danger delete-commission" type="button">Избриши</button></td>
+  </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+let allCommissionRows = [];
+let commissionRowsLoaded = false;
+const selectedCommissionKeys = new Set();
+
+function commissionScopeParams() {
+  const params = new URLSearchParams();
+  if ($('polisaSearch').value.trim()) params.set('polisa_broj', $('polisaSearch').value.trim());
+  if ($('agentSel').value) params.set('agent_id', $('agentSel').value);
+  return params;
+}
+
+function applyCommissionFilters() {
+  const policy = $('commissionPolicyFilter').value.trim().toLocaleLowerCase('mk');
+  const invoice = $('commissionInvoiceFilter').value.trim().toLocaleLowerCase('mk');
+  const year = $('commissionYearFilter').value;
+  const installment = $('commissionInstallmentFilter').value;
+  const rows = allCommissionRows.filter(row =>
+    (!policy || String(row.polisa_broj || '').toLocaleLowerCase('mk').includes(policy)) &&
+    (!invoice || String(row.faktura || '').toLocaleLowerCase('mk').includes(invoice)) &&
+    (year === '' || Number(row.godina) === Number(year)) &&
+    (installment === '' || Number(row.rata) === Number(installment))
+  );
+  renderCommissionRows(rows);
+  $('commissionMessage').textContent = `Прикажани записи: ${rows.length} од ${allCommissionRows.length}`;
+  $('commissionMessage').style.color = '#405060';
+  $('commissionTotal').textContent = `Вкупна провизија: ${fmtCommissionMoney(rows.reduce((sum, row) => sum + Number(row.iznos_provizija || 0), 0))}`;
+  refreshCommissionSelection();
+}
+
+function commissionParams() {
+  const params = new URLSearchParams();
+  const policy = $('commissionPolicyFilter').value.trim() || $('polisaSearch').value.trim();
+  if (policy) params.set('polisa_broj', policy);
+  if ($('agentSel').value) params.set('agent_id', $('agentSel').value);
+  if ($('commissionInvoiceFilter').value.trim()) params.set('faktura', $('commissionInvoiceFilter').value.trim());
+  if ($('commissionYearFilter').value !== '') params.set('godina', $('commissionYearFilter').value);
+  if ($('commissionInstallmentFilter').value !== '') params.set('rata', $('commissionInstallmentFilter').value);
+  return params;
+}
+
+function selectedCommissionRecords() {
+  return [...selectedCommissionKeys].map(key => {
+    const separator = key.indexOf(':');
+    return {source:key.slice(0, separator).trim(), record_id:Number(key.slice(separator + 1))};
+  });
+}
+
+function refreshCommissionSelection() {
+  const selected = selectedCommissionRecords();
+  $('commissionSelectedCount').textContent = `Избрани: ${selected.length}`;
+  $('btnBulkSaveCommission').disabled = selected.length === 0;
+  $('btnBulkDeleteCommission').disabled = selected.length === 0;
+  document.querySelectorAll('.commission-select').forEach(box => box.closest('tr').classList.toggle('is-selected', box.checked));
+}
+
+async function loadCommissionRows() {
+  const scopeParams = commissionScopeParams();
+  const params = scopeParams.toString() ? scopeParams : commissionParams();
+  $('commissionMessage').textContent = 'Се вчитуваат записите...';
+  $('commissionMessage').style.color = '#1f6fb2';
+  try {
+    const data = await commissionRequest(`/api/commission-records?${params}`);
+    allCommissionRows = data.rows || [];
+    commissionRowsLoaded = true;
+    applyCommissionFilters();
+  } catch (error) {
+    $('commissionTable').innerHTML = '';
+    $('commissionMessage').textContent = error.message;
+    $('commissionMessage').style.color = '#b42318';
+  }
+}
+
+function multilevelFilterBody() {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+  const polisa = $('polisaSearch').value.trim();
+  const agentId = $('agentSel').value;
+  if (mesec && !godina) throw new Error("Мора да се избере година кога има избрано месец!");
+  if (!godina && !polisa && !agentId) throw new Error("Мора да се избере година, полиса или агент!");
+  const body = {};
+  if (godina) body.year = parseInt(godina);
+  if (mesec) body.month = parseInt(mesec);
+  if (polisa) body.polisa_broj = polisa;
+  if (agentId) body.agent_id = parseInt(agentId);
+  if ($('regionSel').value) body.region_id = parseInt($('regionSel').value);
+  if ($('teamSel').value) body.team_id = parseInt($('teamSel').value);
+  return body;
+}
+
+function renderTable(targetId, rows, columns) {
+  const target = $(targetId);
+  if (!rows || rows.length === 0) {
+    target.innerHTML = '<div class="kpi-label">Нема податоци</div>';
+    return;
+  }
+  target.innerHTML = `<table class="dash-table"><thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(row => `<tr>${columns.map(c => `<td>${c.format ? c.format(row[c.key]) : (row[c.key] ?? '')}</td>`).join('')}</tr>`).join('')
+  }</tbody></table>`;
+}
+
+function renderBarChart(svgId, rows, labelKey, valueKey) {
+  const svg = $(svgId);
+  const width = svg.clientWidth || 640;
+  const height = 220;
+  const pad = 28;
+  const data = (rows || []).slice(0, 10);
+  const max = Math.max(...data.map(r => Number(r[valueKey] || 0)), 1);
+  const barW = data.length ? (width - pad * 2) / data.length * .62 : 0;
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.innerHTML = data.map((r, i) => {
+    const x = pad + i * ((width - pad * 2) / data.length) + barW * .2;
+    const h = (Number(r[valueKey] || 0) / max) * (height - 70);
+    const y = height - 38 - h;
+    const label = String(r[labelKey] || '').slice(0, 12);
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="4" fill="#1f6fb2"></rect>
+            <text x="${x + barW / 2}" y="${height - 18}" text-anchor="middle" font-size="10" fill="#607080">${label}</text>
+            <text x="${x + barW / 2}" y="${Math.max(y - 6, 12)}" text-anchor="middle" font-size="10" fill="#203040">${fmtNumber(r[valueKey])}</text>`;
+  }).join('');
+}
+
+function renderLineChart(svgId, rows, labelKey, valueKey) {
+  const svg = $(svgId);
+  const width = svg.clientWidth || 720;
+  const height = 220;
+  const pad = 30;
+  const data = rows || [];
+  const max = Math.max(...data.map(r => Number(r[valueKey] || 0)), 1);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  if (data.length === 0) {
+    svg.innerHTML = '<text x="20" y="40" font-size="13" fill="#607080">Нема податоци</text>';
+    return;
+  }
+  const points = data.map((r, i) => {
+    const x = pad + (data.length === 1 ? 0 : i * (width - pad * 2) / (data.length - 1));
+    const y = height - 36 - (Number(r[valueKey] || 0) / max) * (height - 70);
+    return { x, y, label: r[labelKey], value: r[valueKey] };
+  });
+  svg.innerHTML = `<polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#1f6fb2" stroke-width="3"></polyline>
+    ${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="4" fill="#1f6fb2"></circle>
+      <text x="${p.x}" y="${height - 16}" text-anchor="middle" font-size="10" fill="#607080">${p.label}</text>`).join('')}`;
+}
 
 function addOptions(selectId, items, labelField="value", valueField="value") {
   const sel = $(selectId);
@@ -154,9 +535,139 @@ async function filterAgents() {
   addOptions('regionSel', regions, "name", "id");
   addOptions('teamSel',   teams,   "name", "id");
   addOptions('brokerSel', brokers, "name", "broker");
+  refreshCommissionButton();
 }
 
 // --- Button actions ---
+$('agentSel').addEventListener('change', refreshCommissionButton);
+$('polisaSearch').addEventListener('input', refreshCommissionButton);
+$('btnChangeCommission').addEventListener('click', async () => {
+  $('commissionPolicyFilter').value = $('polisaSearch').value.trim();
+  allCommissionRows = [];
+  commissionRowsLoaded = false;
+  selectedCommissionKeys.clear();
+  $('commissionModal').classList.remove('is-hidden');
+  if (commissionParams().toString()) {
+    await loadCommissionRows();
+  } else {
+    $('commissionTable').innerHTML = '';
+    $('commissionTotal').textContent = 'Вкупна провизија: 0';
+    $('commissionMessage').textContent = 'Внесете полиса, фактура, година или рата за пребарување.';
+    $('commissionMessage').style.color = '#405060';
+  }
+});
+$('btnCloseCommission').addEventListener('click', () => $('commissionModal').classList.add('is-hidden'));
+$('btnExportCommission').addEventListener('click', () => {
+  const params = commissionParams();
+  window.location.href = `/siglife-report/api/commission-records-export?${params}`;
+});
+$('btnFilterCommission').addEventListener('click', async () => {
+  if (commissionRowsLoaded) applyCommissionFilters();
+  else await loadCommissionRows();
+});
+['commissionPolicyFilter','commissionInvoiceFilter','commissionYearFilter','commissionInstallmentFilter'].forEach(id => {
+  $(id).addEventListener('input', () => { if (commissionRowsLoaded) applyCommissionFilters(); });
+  $(id).addEventListener('keydown', event => {
+    if (event.key === 'Enter') commissionRowsLoaded ? applyCommissionFilters() : loadCommissionRows();
+  });
+});
+$('commissionTable').addEventListener('change', event => {
+  if (event.target.id === 'selectAllCommission') {
+    document.querySelectorAll('.commission-select').forEach(box => {
+      box.checked = event.target.checked;
+      const row = box.closest('tr[data-id]');
+      const key = `${row.dataset.source.trim()}:${Number(row.dataset.id)}`;
+      if (box.checked) selectedCommissionKeys.add(key); else selectedCommissionKeys.delete(key);
+    });
+  } else if (event.target.classList.contains('commission-select')) {
+    const row = event.target.closest('tr[data-id]');
+    const key = `${row.dataset.source.trim()}:${Number(row.dataset.id)}`;
+    if (event.target.checked) selectedCommissionKeys.add(key); else selectedCommissionKeys.delete(key);
+  }
+  if (event.target.matches('#selectAllCommission, .commission-select')) refreshCommissionSelection();
+});
+$('btnBulkSaveCommission').addEventListener('click', async () => {
+  const records = selectedCommissionRecords();
+  const amount = Number($('bulkCommissionAmount').value);
+  if (!Number.isFinite(amount)) return alert('Внесете валиден износ на провизија.');
+  if (!confirm(`Да се промени провизијата за ${records.length} избрани записи?`)) return;
+  try {
+    const data = await commissionRequest('/api/commission-records-bulk', {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({records, iznos_provizija:amount})
+    });
+    await loadCommissionRows();
+    $('commissionMessage').textContent = data.message;
+    $('commissionMessage').style.color = 'green';
+  } catch (error) {
+    $('commissionMessage').textContent = error.message;
+    $('commissionMessage').style.color = '#b42318';
+  }
+});
+$('btnBulkDeleteCommission').addEventListener('click', async () => {
+  const records = selectedCommissionRecords();
+  if (!confirm(`Дали сигурно сакате да избришете ${records.length} избрани записи? Акцијата не може да се врати.`)) return;
+  try {
+    const data = await commissionRequest('/api/commission-records-bulk-delete', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({records})
+    });
+    selectedCommissionKeys.clear();
+    await loadCommissionRows();
+    $('commissionMessage').textContent = data.message;
+    $('commissionMessage').style.color = 'green';
+  } catch (error) {
+    $('commissionMessage').textContent = error.message;
+    $('commissionMessage').style.color = '#b42318';
+  }
+});
+$('commissionModal').addEventListener('click', event => {
+  if (event.target === $('commissionModal')) $('commissionModal').classList.add('is-hidden');
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') $('commissionModal').classList.add('is-hidden');
+});
+$('commissionTable').addEventListener('click', async event => {
+  const row = event.target.closest('tr[data-id]');
+  if (!row) return;
+  const source = row.dataset.source;
+  const recordId = row.dataset.id;
+
+  if (event.target.classList.contains('save-commission')) {
+    const amount = Number(row.querySelector('.commission-amount').value);
+    if (!Number.isFinite(amount)) return alert('Внесете валиден износ на провизија.');
+    event.target.disabled = true;
+    try {
+      const data = await commissionRequest(`/api/commission-records/${source}/${recordId}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({iznos_provizija:amount})
+      });
+      await loadCommissionRows();
+      $('commissionMessage').textContent = data.message;
+      $('commissionMessage').style.color = 'green';
+    } catch (error) {
+      $('commissionMessage').textContent = error.message;
+      $('commissionMessage').style.color = '#b42318';
+    } finally {
+      event.target.disabled = false;
+    }
+  }
+
+  if (event.target.classList.contains('delete-commission')) {
+    if (!confirm('Дали сигурно сакате да го избришете овој запис? Оваа акција не може да се врати.')) return;
+    event.target.disabled = true;
+    try {
+      const data = await commissionRequest(`/api/commission-records/${source}/${recordId}`, {method:'DELETE'});
+      selectedCommissionKeys.delete(`${source.trim()}:${Number(recordId)}`);
+      await loadCommissionRows();
+      $('commissionMessage').textContent = data.message;
+      $('commissionMessage').style.color = 'green';
+    } catch (error) {
+      $('commissionMessage').textContent = error.message;
+      $('commissionMessage').style.color = '#b42318';
+      event.target.disabled = false;
+    }
+  }
+});
+
 $('btnGenPdf').addEventListener('click', async () => {
   const month = $('monthAg').value;
   const year  = $('yearAg').value;
@@ -175,6 +686,9 @@ $('btnGenPdf').addEventListener('click', async () => {
       team_id: $('teamSel').value || null
   };
 
+  $('resultAgents').textContent = "⏳ Генерирање на PDF во тек...";
+  $('resultAgents').style.color = "blue";
+
   try {
     const res = await fetch('/siglife-report/api/generate_pdf', {
       method: 'POST',
@@ -190,8 +704,32 @@ $('btnGenPdf').addEventListener('click', async () => {
     }
 
     const data = await res.json();
-    $('resultAgents').textContent = data.message;
-    $('resultAgents').style.color = data.success ? 'green' : 'green';
+    if (!data.job_id) {
+      // Nema job_id - stariot sinhron odgovor, samo prikazi ja porakata.
+      $('resultAgents').textContent = data.message;
+      $('resultAgents').style.color = data.success ? 'green' : 'red';
+      return;
+    }
+
+    const jobId = data.job_id;
+    const checkPdfStatus = async () => {
+      const statusResp = await fetch(`/siglife-report/api/generate_pdf/status/${jobId}`);
+      const statusData = await statusResp.json();
+
+      if (statusData.status === "ready") {
+        $('resultAgents').textContent = "✅ " + (statusData.message || "Генерирањето на PDF заврши.");
+        $('resultAgents').style.color = "green";
+      } else if (statusData.status === "error") {
+        $('resultAgents').textContent = "❌ " + (statusData.message || "Генерирањето на PDF не успеа.");
+        $('resultAgents').style.color = "red";
+      } else {
+        $('resultAgents').textContent = "⏳ " + (statusData.message || "Генерирањето на PDF е во тек...");
+        $('resultAgents').style.color = "blue";
+        setTimeout(checkPdfStatus, 3000);
+      }
+    };
+
+    checkPdfStatus();
   } catch (err) {
     $('resultAgents').textContent = `Грешка: ${err}`;
     $('resultAgents').style.color = 'red';
@@ -337,6 +875,103 @@ $('btnExportExcel').addEventListener('click', async () => {
   }
 });
 
+// ---------- Multilevel Reports ----------
+$('btnMultilevelPregledi').addEventListener('click', async () => {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+  const polisa = $('polisaSearch').value.trim();
+  const agentId = $('agentSel').value;
+
+  if (mesec && !godina) {
+    alert("Мора да се избере година кога има избрано месец!");
+    return;
+  }
+
+  if (!godina && !polisa && !agentId) {
+    alert("Мора да се избере година, полиса или агент!");
+    return;
+  }
+
+  const opis = mesec && godina
+    ? `${mesec}/${godina}`
+    : godina
+      ? `${godina}`
+    : polisa
+      ? `полиса ${polisa}`
+      : `агент ${agentId}`;
+  $('resultAgents').textContent = `Се генерираат Multilevel прегледи за ${opis}...`;
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const body = {};
+    if (godina) {
+      body.year = parseInt(godina);
+    }
+    if (mesec) body.month = parseInt(mesec);
+    if (polisa) body.polisa_broj = polisa;
+    if (agentId) body.agent_id = parseInt(agentId);
+    if ($('regionSel').value) body.region_id = parseInt($('regionSel').value);
+    if ($('teamSel').value) body.team_id = parseInt($('teamSel').value);
+
+    const resp = await fetch('/siglife-report/api/multilevel-pregledi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Грешка ${resp.status}: ${text.slice(0, 200)}`);
+    }
+
+    const started = await resp.json();
+    const jobId = started.job_id;
+    if (!jobId) throw new Error("Не е добиен job_id за Multilevel export.");
+
+    let status = "pending";
+    let statusData = null;
+    for (let attempt = 0; attempt < 1800; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const statusResp = await fetch(`/siglife-report/api/multilevel-pregledi/status/${jobId}`);
+      statusData = await statusResp.json();
+      status = statusData.status;
+      $('resultAgents').textContent = `Multilevel export: ${status}...`;
+
+      if (status === "ready") break;
+      if (status === "error") throw new Error(statusData.message || "Грешка при Multilevel export.");
+    }
+
+    if (status !== "ready") {
+      throw new Error("Генерирањето се уште трае. Обиди се повторно за малку.");
+    }
+
+    const downloadResp = await fetch(`/siglife-report/api/multilevel-pregledi/download/${jobId}`);
+    if (!downloadResp.ok) {
+      const text = await downloadResp.text();
+      throw new Error(`Грешка ${downloadResp.status}: ${text.slice(0, 200)}`);
+    }
+
+    const blob = await downloadResp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const disposition = downloadResp.headers.get('Content-Disposition');
+    const match = disposition && disposition.match(/filename="?([^"]+)"?/);
+
+    a.href = url;
+    a.download = match ? match[1] : `multilevel_pregledi.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    $('resultAgents').textContent = "Multilevel прегледите се симнати успешно.";
+    $('resultAgents').style.color = "green";
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
 // ---------- Export Agent Tree ----------
 // ---------- Export Agent Tree ----------
 $('btnAgentDrvo').addEventListener('click', async () => {
@@ -415,7 +1050,12 @@ $('btnInkasoBr').addEventListener('click', async () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = "Inkaso_broker.xlsx";
+    const disposition = response.headers.get('content-disposition') || '';
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainName = disposition.match(/filename="?([^";]+)"?/i);
+    a.download = encodedName
+      ? decodeURIComponent(encodedName[1])
+      : (plainName ? plainName[1] : "Provizija na brokeri.xlsx");
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -432,6 +1072,138 @@ $('btnInkasoBr').addEventListener('click', async () => {
 
 
 
+// ---------- Непресметани полиси ----------
+$('btnNePresmetani').addEventListener('click', async () => {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  $('resultAgents').textContent = "Се вчитуваат непресметани полиси...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const res = await fetch(`/siglife-report/api/nepresmetani_polisi?mesec=${mesec}&godina=${godina}`);
+    const data = await res.json();
+
+    if (!data.success) {
+      $('resultAgents').textContent = "❌ " + data.message;
+      $('resultAgents').style.color = "red";
+      return;
+    }
+
+    $('resultAgents').textContent = `Пронајдени: ${data.count} полиси со непресметана провизија.`;
+    $('resultAgents').style.color = data.count > 0 ? "#7b2d8b" : "green";
+
+    const panel = $('nePresmetaniPanel');
+    panel.classList.remove('is-hidden');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    $('nePresmetaniInfo').textContent = `Период до: ${mesec}/${godina} — вкупно ${data.count} полиси`;
+
+    if (data.count === 0) {
+      $('nePresmetaniTable').innerHTML = '<p style="color:green;font-weight:700;">Сите провизии се пресметани.</p>';
+      return;
+    }
+
+    const _mesec = mesec, _godina = godina;
+    $('nePresmetaniTable').innerHTML = `
+      <table class="dash-table" style="min-width:720px;">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Полиса</th>
+            <th>Агент</th>
+            <th style="text-align:right;">Фактури</th>
+            <th style="text-align:right;">Наплата (МКД)</th>
+            <th style="text-align:center;">Акции</th>
+          </tr>
+        </thead>
+        <tbody id="nePresmetaniTbody">
+          ${data.rows.map((r, i) => `
+            <tr id="npp-row-${i}">
+              <td style="color:#999;">${i + 1}</td>
+              <td><b>${r.polisa_broj || ''}</b></td>
+              <td>${r.agent_ime || ''} <span style="color:#aaa;font-size:.8em;">(${r.par_agentid || ''})</span></td>
+              <td style="text-align:right;">${r.br_fakturi || 0}</td>
+              <td style="text-align:right;">${new Intl.NumberFormat('mk-MK', {minimumFractionDigits:2, maximumFractionDigits:2}).format(r.vkupno_naplata || 0)}</td>
+              <td style="text-align:center;white-space:nowrap;">
+                <button style="font-size:.78rem;padding:.2rem .55rem;border:1px solid #7b2d8b;background:#f8f0ff;color:#7b2d8b;border-radius:4px;cursor:pointer;margin-right:4px;"
+                  onclick="zostoNePres('${(r.polisa_broj||'').replace(/'/g,"\\'")}',${i},'${_mesec}','${_godina}',${r.par_agentid||0})">Зошто?</button>
+                <button id="npp-btn-${i}" style="font-size:.78rem;padding:.2rem .55rem;border:1px solid #1a7f3c;background:#e8f5e9;color:#1a7f3c;border-radius:4px;cursor:pointer;"
+                  onclick="presmetajPolisa('${(r.polisa_broj||'').replace(/'/g,"\\'")}',${i},'${_mesec}','${_godina}')">Пресметај</button>
+              </td>
+            </tr>
+            <tr id="npp-detail-${i}" class="is-hidden">
+              <td colspan="6" id="npp-detail-body-${i}" style="background:#f5f7fa;padding:.75rem 1.2rem;font-size:.84rem;border-top:none;"></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+async function zostoNePres(polisa, idx, mesec, godina, agentid) {
+  const detailRow  = document.getElementById(`npp-detail-${idx}`);
+  const detailBody = document.getElementById(`npp-detail-body-${idx}`);
+  if (!detailRow.classList.contains('is-hidden')) {
+    detailRow.classList.add('is-hidden');
+    return;
+  }
+  detailBody.innerHTML = '<span style="color:#607080;">Вчитување...</span>';
+  detailRow.classList.remove('is-hidden');
+  try {
+    const res = await fetch(`/siglife-report/api/zosto_ne_presmetana?polisa=${encodeURIComponent(polisa)}&mesec=${mesec}&godina=${godina}&agentid=${agentid}`);
+    const d   = await res.json();
+    if (!d.success) { detailBody.innerHTML = `<span style="color:red;">${d.message}</span>`; return; }
+    detailBody.innerHTML = `<pre style="font-size:.75rem;white-space:pre-wrap;margin:0;font-family:monospace;color:#223;">${d.text}</pre>`;
+  } catch(err) {
+    detailBody.innerHTML = `<span style="color:red;">${err.message}</span>`;
+  }
+}
+
+async function presmetajPolisa(polisa, idx, mesec, godina) {
+  const btn = document.getElementById(`npp-btn-${idx}`);
+  btn.disabled = true;
+  btn.textContent = '...';
+  btn.style.background = '#fff9c4';
+  const detailRow  = document.getElementById(`npp-detail-${idx}`);
+  const detailBody = document.getElementById(`npp-detail-body-${idx}`);
+  try {
+    const res = await fetch(
+      `/siglife-report/api/presmetaj_polisa?polisa=${encodeURIComponent(polisa)}&mesec=${mesec}&godina=${godina}`,
+      { method: 'POST' }
+    );
+    const d = await res.json();
+    const row = document.getElementById(`npp-row-${idx}`);
+    detailRow.classList.remove('is-hidden');
+    if (d.success) {
+      row.style.background = '#e8f5e9';
+      btn.textContent = '✓ OK';
+      btn.style.background = '#c8e6c9';
+      btn.style.color = '#1a7f3c';
+      detailBody.innerHTML = `<span style="color:#1a7f3c;font-weight:700;">${d.message}</span>`;
+    } else {
+      row.style.background = '#ffebee';
+      btn.textContent = '✗';
+      btn.style.background = '#ffcdd2';
+      btn.style.color = '#c62828';
+      btn.disabled = false;
+      detailBody.innerHTML = `<span style="color:#c62828;font-weight:700;">${d.message}</span>`;
+    }
+  } catch(err) {
+    btn.textContent = '✗';
+    btn.style.background = '#ffcdd2';
+    btn.disabled = false;
+    detailBody.innerHTML = `<span style="color:red;">${err.message}</span>`;
+    detailRow.classList.remove('is-hidden');
+  }
+}
+
 // --- Initialize ---
 window.addEventListener('DOMContentLoaded', async () => { await initStatic(); await initDynamic(); });
 
@@ -440,6 +1212,9 @@ $('btnShowTree').addEventListener('click', async () => {
     const mesec = $('monthAg').value;
     const godina = $('yearAg').value;
     if(!mesec || !godina) return alert("Мора да се изберат месец и година!");
+
+    $('agentTreePanel').classList.remove('is-hidden');
+    $('agentTreePanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const res = await fetch(`/siglife-report/api/agent_tree_json?mesec=${mesec}&godina=${godina}`);
     if(!res.ok) return alert(`Грешка ${res.status}`);
@@ -585,6 +1360,11 @@ $('btnGenExselBr').addEventListener('click', async () => {
       return;
   }
 
+  const downloadWindow = window.open('about:blank', '_blank');
+  if (downloadWindow) {
+    downloadWindow.document.write('<p style="font-family:Arial">Se generiraat Excel fajlovite. Download ke zapocne avtomatski...</p>');
+  }
+
   const body = {
       month: parseInt(month),
       year: parseInt(year),
@@ -615,6 +1395,14 @@ $('btnGenExselBr').addEventListener('click', async () => {
     // 👉 3) финален статус после завршување
     $('resultBrokers').textContent = data.message;
     $('resultBrokers').style.color = data.success ? 'green' : 'red';
+
+    if (data.success && data.download_url) {
+      if (downloadWindow) {
+        downloadWindow.location.href = data.download_url;
+      } else {
+        window.location.href = data.download_url;
+      }
+    }
 
   } catch (err) {
     $('resultBrokers').textContent = `❌ Грешка: ${err}`;
@@ -678,6 +1466,118 @@ $('btnGenProv').addEventListener('click', async () => {
 
     checkStatus();
 
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+// ---------- Збирен преглед ----------
+$('btnZbirenPregled').addEventListener('click', async () => {
+  const mesec = $('monthAg').value;
+  const godina = $('yearAg').value;
+
+  if (!mesec || !godina) {
+    alert("Мора да се изберат месец и година!");
+    return;
+  }
+
+  $('resultAgents').textContent = "⏳ Збирниот преглед е стартуван...";
+  $('resultAgents').style.color = "blue";
+
+  try {
+    const startResp = await fetch('/siglife-report/api/zbiren_pregled', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mesec, godina })
+    });
+    const startData = await startResp.json();
+    if (!startResp.ok) throw new Error(startData.detail || startData.message);
+    const jobId = startData.job_id;
+
+    const checkStatus = async () => {
+      const statusResp = await fetch(`/siglife-report/api/zbiren_pregled_status/${jobId}`);
+      const statusData = await statusResp.json();
+      if (statusData.status === "ready") {
+        $('resultAgents').textContent = "✅ Збирниот преглед е завршен: " + (statusData.message || "");
+        $('resultAgents').style.color = "green";
+      } else if (statusData.status === "error") {
+        $('resultAgents').textContent = "❌ Грешка: " + statusData.message;
+        $('resultAgents').style.color = "red";
+      } else {
+        setTimeout(checkStatus, 5000);
+      }
+    };
+    checkStatus();
+
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+$('btnOpenMlDashboard').addEventListener('click', () => {
+  try {
+    const body = multilevelFilterBody();
+    const params = new URLSearchParams();
+    Object.entries(body).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') params.set(key, value);
+    });
+    window.open(`/siglife-report/provizia/multilevel-dashboard?${params.toString()}`, '_blank');
+  } catch (err) {
+    $('resultAgents').textContent = "❌ " + err.message;
+    $('resultAgents').style.color = "red";
+  }
+});
+
+document.querySelectorAll('.dashboard-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dashboard-tab').forEach(b => b.classList.remove('is-active'));
+    document.querySelectorAll('.dashboard-view').forEach(v => v.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    $(`dashboard-${btn.dataset.dashboardTab}`).classList.add('is-active');
+  });
+});
+
+if ($('btnLoadMlDashboard')) $('btnLoadMlDashboard').addEventListener('click', async () => {
+  try {
+    const body = multilevelFilterBody();
+    $('resultAgents').textContent = "Се вчитува Multilevel dashboard...";
+    $('resultAgents').style.color = "blue";
+    const resp = await fetch('/siglife-report/api/multilevel-dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Грешка ${resp.status}: ${text.slice(0, 200)}`);
+    }
+    const data = await resp.json();
+    $('mlKpiPolicies').textContent = fmtNumber(data.kpis.policies);
+    $('mlKpiPremium').textContent = fmtMoney(data.kpis.premium_collected);
+    $('mlKpiCommission').textContent = fmtMoney(data.kpis.commission_paid);
+    $('mlKpiAvg').textContent = fmtMoney(data.kpis.average_premium);
+    $('mlKpiAgents').textContent = fmtNumber(data.kpis.agents);
+    $('mlKpiInvoices').textContent = fmtNumber(data.kpis.naplata_fakturi);
+
+    renderTable('mlTopAgentsTable', data.top_agents, [
+      { key:'agent_name', label:'Агент' },
+      { key:'policies', label:'Полиси', format:fmtNumber },
+      { key:'commission', label:'Провизија', format:fmtMoney },
+    ]);
+    renderTable('mlCommissionTable', data.commission_type, [
+      { key:'type', label:'Тип' },
+      { key:'policies', label:'Полиси', format:fmtNumber },
+      { key:'points', label:'Бодови', format:fmtNumber },
+      { key:'commission', label:'Провизија', format:fmtMoney },
+    ]);
+    renderBarChart('mlChartCommissionType', data.commission_type, 'type', 'commission');
+    renderBarChart('mlChartAgents', data.top_agents, 'agent_name', 'commission');
+    renderBarChart('mlChartPointsType', data.commission_type, 'type', 'points');
+    renderLineChart('mlChartMonthly', data.monthly, 'month', 'commission');
+    $('resultAgents').textContent = "Multilevel dashboard е вчитан.";
+    $('resultAgents').style.color = "green";
   } catch (err) {
     $('resultAgents').textContent = "❌ " + err.message;
     $('resultAgents').style.color = "red";

@@ -34,6 +34,51 @@
   </form>
 </div>
 
+{% if aneksi is not none %}
+  {% if not aneksi %}
+  <div class="alert alert-info">Нема анекси за оваа полиса.</div>
+  {% else %}
+
+  <div style="margin-bottom:.75rem;">
+    <button type="button" class="btn btn-primary" onclick="openSmeniGodinaAneksModal()">📅 Промени година на анекс</button>
+  </div>
+  <form id="smeniGodinaAneksForm" method="post" action="/siglife-report/promena-premija/smeni-godina-aneks">
+    <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+    <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+    <input type="hidden" name="os_aneksid" id="sga_os_aneksid_hidden" value="">
+    <input type="hidden" name="nova_godina" id="sga_nova_godina_hidden" value="">
+  </form>
+
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Анекс</th>
+          <th>Година</th>
+          <th>Датум на анекс</th>
+          <th style="text-align:right">Бр. фактури</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in aneksi %}
+        <tr>
+          <td>
+            <input type="radio" class="ga-aneks-check" name="ga_aneksid_choice"
+                   value="{{ a.os_aneksid }}">
+          </td>
+          <td><strong>{{ a.os_aneks }}</strong></td>
+          <td>{{ a.godina }}</td>
+          <td>{{ a.datum_aneks }}</td>
+          <td style="text-align:right">{{ a.br_fakturi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endif %}
+
 {% if rows is not none %}
   {% if not rows %}
   <div class="alert alert-info">Нема фактури за оваа полиса.</div>
@@ -51,51 +96,121 @@
   </form>
   {% endif %}
 
+  {% if tip_promena == 'promena_datum_faktura' %}
+  <div style="margin-bottom:.75rem; display:flex; gap:.5rem; align-items:center;">
+    <button type="button" class="btn btn-secondary" onclick="setSiteSmeniDatum(true)">☑️ Избери ги сите</button>
+    <button type="button" class="btn btn-secondary" onclick="setSiteSmeniDatum(false)">⬜ Отселектирај ги сите</button>
+    <button type="button" class="btn btn-primary" onclick="openSmeniDatumModal()">📅 Промени датум</button>
+  </div>
+  <form id="smeniDatumForm" method="post" action="/siglife-report/promena-premija/smeni-datum">
+    <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+    <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+    <input type="hidden" name="nova_godina" id="sd_nova_godina_hidden" value="">
+  </form>
+  {% endif %}
+
+  <div class="card" style="margin-bottom:.75rem;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.75rem 1rem; align-items:end;">
+      <div class="form-group" style="margin:0">
+        <label>Филтер: Фактура</label>
+        <input type="text" id="filter_faktura" placeholder="пр. 92607" oninput="filterFakturiTable()">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Филтер: Година на фактура</label>
+        <input type="text" id="filter_godina" placeholder="пр. 2026" oninput="filterFakturiTable()">
+      </div>
+      <div>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('filter_faktura').value=''; document.getElementById('filter_godina').value=''; filterFakturiTable();">✕ Исчисти филтер</button>
+      </div>
+    </div>
+  </div>
+
+  {% if tip_promena == 'premija_kolektivno' %}
+  <div style="margin-bottom:.75rem; display:flex; gap:.5rem; align-items:center;">
+    <button type="button" class="btn btn-secondary" onclick="setSiteIzbrisiStavki(true)">☑️ Избери ги сите</button>
+    <button type="button" class="btn btn-secondary" onclick="setSiteIzbrisiStavki(false)">⬜ Отселектирај ги сите</button>
+    <button type="button" class="btn btn-danger" onclick="submitIzbrisiStavki()">🗑️ Избриши избрани (<span id="izb_broj_izbrani">0</span>)</button>
+  </div>
+  <form id="izbrisiStavkiForm" method="post" action="/siglife-report/promena-premija/izbrisi-stavki">
+    <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+    <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+  </form>
+  {% endif %}
+
   <div class="card" style="padding:0; overflow-x:auto;">
-    <table>
+    <table id="fakturiTable">
       <thead>
         <tr>
           {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
           <th></th>
           {% endif %}
+          {% if tip_promena == 'promena_datum_faktura' %}
+          <th><input type="checkbox" id="sd_select_all" onchange="setSiteSmeniDatum(this.checked)" title="Избери ги сите"></th>
+          {% endif %}
+          {% if tip_promena == 'premija_kolektivno' %}
+          <th><input type="checkbox" id="izb_select_all" onchange="setSiteIzbrisiStavki(this.checked)" title="Избери ги сите"></th>
+          {% endif %}
           <th>Фактура</th>
+          <th>Клиент</th>
           <th>Дат. Фактура</th>
           <th>Дат. Валута</th>
           <th>Тип</th>
           <th style="text-align:right">Износ</th>
           <th style="text-align:right">Износ (ден.)</th>
           <th style="text-align:right">Наплата</th>
-          {% if tip_promena != 'dopolnitelno_osiguruvanje' %}
+          <th style="text-align:right">Салдо</th>
+          {% if tip_promena not in ('dopolnitelno_osiguruvanje', 'promena_datum_faktura') %}
           <th>Нов износ</th>
           <th>Нов износ (ден.)</th>
           <th></th>
+          {% if tip_promena == 'premija_kolektivno' %}
+          <th></th>
+          {% endif %}
           {% endif %}
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
-        <tr>
+        {% set proknizena = (tip_promena == 'premija_kolektivno') and r.e_proknizena %}
+        <tr data-faktura="{{ r.faktura|lower }}">
           {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
           <td>
             <input type="checkbox" class="dop-faktura-check" form="dopolnitelnoForm"
                    name="fakturi_ids" value="{{ r.os_aneks_fakturaid }}">
           </td>
+          {% elif tip_promena == 'promena_datum_faktura' %}
+          <td>
+            <input type="checkbox" class="sd-faktura-check" form="smeniDatumForm"
+                   name="fakturi_ids" value="{{ r.os_aneks_fakturaid }}" onchange="azurirajSelectAllSmeniDatum()">
+          </td>
+          {% endif %}
+          {% if tip_promena == 'premija_kolektivno' %}
+          <td>
+            {% if not proknizena %}
+            <input type="checkbox" class="izb-faktura-check" form="izbrisiStavkiForm"
+                   name="fakturi_ids" value="{{ r.os_aneks_fakturaid }}" onchange="azurirajBrojIzbrisiStavki()">
+            {% endif %}
+          </td>
           {% endif %}
           <td><strong>{{ r.faktura }}</strong></td>
+          <td>{{ r.client_naziv }}</td>
           <td>{{ r.data_faktura }}</td>
           <td>{{ r.data_valuta }}</td>
           <td>{{ r.tip_knizi }}</td>
           <td style="text-align:right">{{ "%.2f"|format(r.iznos) }}</td>
           <td style="text-align:right">{{ "%.2f"|format(r.iznos_denari) }}</td>
           <td style="text-align:right">{{ "%.2f"|format(r.naplata) }}</td>
-          {% if tip_promena != 'dopolnitelno_osiguruvanje' %}
+          <td style="text-align:right">{{ "%.2f"|format(r.saldo) }}</td>
+          {% if tip_promena not in ('dopolnitelno_osiguruvanje', 'promena_datum_faktura') %}
           <td>
             <input type="number" step="0.01" form="editForm-{{ r.os_aneks_fakturaid }}"
-                   name="nov_iznos" value="{{ '%.2f'|format(r.iznos) }}" style="min-width:90px;">
+                   name="nov_iznos" value="{{ '%.2f'|format(r.iznos) }}" style="min-width:90px;"
+                   {% if proknizena %}disabled{% endif %}>
           </td>
           <td>
             <input type="number" step="0.01" form="editForm-{{ r.os_aneks_fakturaid }}"
-                   name="nov_iznos_denari" value="{{ '%.2f'|format(r.iznos_denari) }}" style="min-width:100px;">
+                   name="nov_iznos_denari" value="{{ '%.2f'|format(r.iznos_denari) }}" style="min-width:100px;"
+                   {% if proknizena %}disabled{% endif %}>
           </td>
           <td>
             <form id="editForm-{{ r.os_aneks_fakturaid }}" method="post"
@@ -105,16 +220,134 @@
               <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
               <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
               <input type="hidden" name="os_aneks_fakturaid" value="{{ r.os_aneks_fakturaid }}">
+              {% if not proknizena %}
               <button type="submit" class="btn btn-warning" style="padding:.4rem .8rem; font-size:.82rem;">💾 Зачувај</button>
+              {% else %}
+              <span title="Веќе прокнижена — директна промена е оневозможена" style="color:#95a5a6; font-size:.8rem;">🔒 прокнижена</span>
+              {% endif %}
             </form>
+            {% if not proknizena %}
+            <form method="post" action="/siglife-report/promena-premija/izbrisi-stavka"
+                  onsubmit="return confirm('Дали сте сигурни дека сакате да ја избришете фактурата {{ r.faktura }} (износ {{ '%.2f'|format(r.iznos) }})? Оваа акција е неповратна.');"
+                  style="display:inline;">
+              <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+              <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+              <input type="hidden" name="os_aneks_fakturaid" value="{{ r.os_aneks_fakturaid }}">
+              <button type="submit" class="btn btn-danger" style="padding:.4rem .8rem; font-size:.82rem;">🗑️ Избриши</button>
+            </form>
+            {% endif %}
           </td>
+          {% if tip_promena == 'premija_kolektivno' %}
+          <td>
+            {% if proknizena %}
+            <form id="dodajStavkaForm-{{ r.os_aneks_fakturaid }}" method="post"
+                  action="/siglife-report/promena-premija/dodaj-stavka" style="display:inline;">
+              <input type="hidden" name="polisa_broj" value="{{ polisa_broj }}">
+              <input type="hidden" name="tip_promena" value="{{ tip_promena }}">
+              <input type="hidden" name="os_aneks_fakturaid" value="{{ r.os_aneks_fakturaid }}">
+              <input type="hidden" name="nov_iznos" value="">
+              <button type="button" class="btn btn-primary" style="padding:.4rem .8rem; font-size:.82rem;"
+                      onclick="submitDodajStavka({{ r.os_aneks_fakturaid }}, '{{ r.faktura }}', {{ '%.2f'|format(r.iznos) }}, '{{ r.valuta_kod }}')">➕ Додади ставка</button>
+            </form>
+            {% endif %}
+          </td>
+          {% endif %}
           {% endif %}
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <div class="card" style="margin-top:.75rem; display:flex; gap:1.5rem; flex-wrap:wrap;">
+    <div><strong>Вкупно износ:</strong> {{ "%.2f"|format(rows|sum(attribute='iznos')) }}</div>
+    <div><strong>Вкупно наплата:</strong> {{ "%.2f"|format(rows|sum(attribute='naplata')) }}</div>
+    <div><strong>Вкупно салдо:</strong> {{ "%.2f"|format(rows|sum(attribute='saldo')) }}</div>
+  </div>
   {% endif %}
+{% endif %}
+
+<script>
+function filterFakturiTable() {
+  var filterFaktura = (document.getElementById('filter_faktura') || {}).value || '';
+  var filterGodina = (document.getElementById('filter_godina') || {}).value || '';
+  filterFaktura = filterFaktura.toLowerCase().trim();
+  filterGodina = filterGodina.toLowerCase().trim();
+  var table = document.getElementById('fakturiTable');
+  if (!table) {
+    return;
+  }
+  var rows = table.querySelectorAll('tbody tr[data-faktura]');
+  rows.forEach(function (row) {
+    var faktura = row.getAttribute('data-faktura') || '';
+    var ok = (!filterFaktura || faktura.indexOf(filterFaktura) !== -1)
+          && (!filterGodina || faktura.indexOf(filterGodina) !== -1);
+    row.style.display = ok ? '' : 'none';
+  });
+}
+</script>
+
+{% if tip_promena == 'premija_kolektivno' %}
+<script>
+function azurirajBrojIzbrisiStavki() {
+  var checked = document.querySelectorAll('.izb-faktura-check:checked');
+  var el = document.getElementById('izb_broj_izbrani');
+  if (el) {
+    el.textContent = checked.length;
+  }
+  var all = document.querySelectorAll('tr[data-faktura]:not([style*="display: none"]) .izb-faktura-check');
+  var selectAll = document.getElementById('izb_select_all');
+  if (selectAll) {
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+  }
+}
+
+function setSiteIzbrisiStavki(izbrano) {
+  // само видливите редови (ако е активен филтерот) се означуваат/отселектираат
+  var checkboxes = document.querySelectorAll('tr[data-faktura] .izb-faktura-check');
+  checkboxes.forEach(function (cb) {
+    var row = cb.closest('tr');
+    if (!row || row.style.display === 'none') {
+      return;
+    }
+    cb.checked = izbrano;
+  });
+  azurirajBrojIzbrisiStavki();
+}
+
+function submitIzbrisiStavki() {
+  var checked = document.querySelectorAll('.izb-faktura-check:checked');
+  if (!checked.length) {
+    alert('Изберете барем една ставка за бришење.');
+    return;
+  }
+  if (!confirm('Дали сте сигурни дека сакате да ги избришете ' + checked.length + ' избрани ставка(и)? Оваа акција е неповратна.')) {
+    return;
+  }
+  document.getElementById('izbrisiStavkiForm').submit();
+}
+
+function submitDodajStavka(fakturaid, faktura, staroIznos, valutaKod) {
+  var novIznos = prompt(
+    'Внесете го целосниот нов износ (' + valutaKod + ') за фактура ' + faktura + ' (моментален прокнижен износ: ' + staroIznos.toFixed(2) + ' ' + valutaKod + '):',
+    staroIznos.toFixed(2)
+  );
+  if (novIznos === null) {
+    return;
+  }
+  novIznos = novIznos.replace(',', '.').trim();
+  if (novIznos === '' || isNaN(parseFloat(novIznos))) {
+    alert('Внесете важечки износ.');
+    return;
+  }
+  if (!confirm('Дали сте сигурни дека сакате да додадете нова ставка (нов анекс, датиран денес) за фактура ' + faktura + ' со износ ' + parseFloat(novIznos).toFixed(2) + ' ' + valutaKod + '?')) {
+    return;
+  }
+  var form = document.getElementById('dodajStavkaForm-' + fakturaid);
+  form.querySelector('input[name="nov_iznos"]').value = novIznos;
+  form.submit();
+}
+</script>
 {% endif %}
 
 {% if tip_promena == 'dopolnitelno_osiguruvanje' %}
@@ -183,8 +416,161 @@ function submitDopolnitelno() {
   }
   document.getElementById('df_tip_knizi_novo').value = document.getElementById('dop_tip_knizi').value;
   document.getElementById('df_nov_iznos').value = document.getElementById('dop_iznos').value;
-  document.getElementById('df_nov_iznos_denari').value = document.getElementById('dop_iznos_denari').value;
   document.getElementById('dopolnitelnoForm').submit();
+}
+</script>
+{% endif %}
+
+{% if tip_promena == 'promena_datum_faktura' %}
+<div id="smeniDatumModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,.4); z-index:2000; align-items:flex-start; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; margin-top:8vh; width:min(420px, 92vw);
+       box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <div style="padding:1rem 1.25rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <strong>Промена на датум на фактура/валута</strong>
+      <button type="button" onclick="closeSmeniDatumModal()" class="btn btn-secondary" style="padding:.2rem .6rem;">✕</button>
+    </div>
+    <div style="padding:1rem 1.25rem;">
+      <div id="sd_error" class="alert alert-error" style="display:none;"></div>
+      <div class="form-group">
+        <label>Нова година</label>
+        <input type="number" step="1" id="sd_nova_godina" placeholder="пр. 2025">
+      </div>
+      <p style="color:#7f8c8d; font-size:.85rem;">
+        Дозволена е промена на произволна година (напред или наназад).
+      </p>
+      <p style="color:#7f8c8d; font-size:.85rem;">
+        Избрани фактури: <span id="sd_broj_izbrani">0</span>
+      </p>
+    </div>
+    <div style="padding:.75rem 1.25rem; border-top:1px solid #eee; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="closeSmeniDatumModal()">Затвори</button>
+      <button type="button" class="btn btn-primary" onclick="submitSmeniDatum()">💾 Зачувај</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function azurirajSelectAllSmeniDatum() {
+  var checked = document.querySelectorAll('.sd-faktura-check:checked');
+  var all = document.querySelectorAll('tr[data-faktura]:not([style*="display: none"]) .sd-faktura-check');
+  var selectAll = document.getElementById('sd_select_all');
+  if (selectAll) {
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+  }
+}
+
+function setSiteSmeniDatum(izbrano) {
+  var checkboxes = document.querySelectorAll('tr[data-faktura] .sd-faktura-check');
+  checkboxes.forEach(function (cb) {
+    var row = cb.closest('tr');
+    if (!row || row.style.display === 'none') {
+      return;
+    }
+    cb.checked = izbrano;
+  });
+  azurirajSelectAllSmeniDatum();
+}
+
+function openSmeniDatumModal() {
+  var checked = document.querySelectorAll('.sd-faktura-check:checked');
+  if (!checked.length) {
+    alert('Изберете барем една фактура пред да продолжите.');
+    return;
+  }
+  document.getElementById('sd_error').style.display = 'none';
+  document.getElementById('sd_broj_izbrani').textContent = checked.length;
+  document.getElementById('smeniDatumModal').style.display = 'flex';
+}
+
+function closeSmeniDatumModal() {
+  document.getElementById('smeniDatumModal').style.display = 'none';
+}
+
+function submitSmeniDatum() {
+  var checked = document.querySelectorAll('.sd-faktura-check:checked');
+  var errEl = document.getElementById('sd_error');
+  if (!checked.length) {
+    errEl.textContent = 'Изберете барем една фактура.';
+    errEl.style.display = 'block';
+    return;
+  }
+  var godina = document.getElementById('sd_nova_godina').value;
+  if (!godina) {
+    errEl.textContent = 'Внесете ја новата година.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!confirm('Дали сте сигурни дека сакате да ги промените датумите на ' + checked.length + ' фактура(и) на година ' + godina + '?')) {
+    return;
+  }
+  document.getElementById('sd_nova_godina_hidden').value = godina;
+  document.getElementById('smeniDatumForm').submit();
+}
+</script>
+{% endif %}
+
+{% if tip_promena == 'promena_godina_aneks' %}
+<div id="smeniGodinaAneksModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,.4); z-index:2000; align-items:flex-start; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; margin-top:8vh; width:min(420px, 92vw);
+       box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <div style="padding:1rem 1.25rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <strong>Промена на година на анекс</strong>
+      <button type="button" onclick="closeSmeniGodinaAneksModal()" class="btn btn-secondary" style="padding:.2rem .6rem;">✕</button>
+    </div>
+    <div style="padding:1rem 1.25rem;">
+      <div id="ga_error" class="alert alert-error" style="display:none;"></div>
+      <div class="form-group">
+        <label>Нова година</label>
+        <input type="number" step="1" id="ga_nova_godina" placeholder="пр. 2025">
+      </div>
+      <p style="color:#7f8c8d; font-size:.85rem;">
+        Дозволена е промена на произволна година (напред или наназад). Ова ги менува датумите на СИТЕ фактури под избраниот анекс.
+      </p>
+    </div>
+    <div style="padding:.75rem 1.25rem; border-top:1px solid #eee; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="closeSmeniGodinaAneksModal()">Затвори</button>
+      <button type="button" class="btn btn-primary" onclick="submitSmeniGodinaAneks()">💾 Зачувај</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openSmeniGodinaAneksModal() {
+  var checked = document.querySelector('.ga-aneks-check:checked');
+  if (!checked) {
+    alert('Изберете анекс пред да продолжите.');
+    return;
+  }
+  document.getElementById('ga_error').style.display = 'none';
+  document.getElementById('smeniGodinaAneksModal').style.display = 'flex';
+}
+
+function closeSmeniGodinaAneksModal() {
+  document.getElementById('smeniGodinaAneksModal').style.display = 'none';
+}
+
+function submitSmeniGodinaAneks() {
+  var checked = document.querySelector('.ga-aneks-check:checked');
+  var errEl = document.getElementById('ga_error');
+  if (!checked) {
+    errEl.textContent = 'Изберете анекс.';
+    errEl.style.display = 'block';
+    return;
+  }
+  var godina = document.getElementById('ga_nova_godina').value;
+  if (!godina) {
+    errEl.textContent = 'Внесете ја новата година.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!confirm('Дали сте сигурни дека сакате да ја промените годината на анексот на ' + godina + '? Ова ќе ги промени датумите на СИТЕ фактури под тој анекс.')) {
+    return;
+  }
+  document.getElementById('sga_os_aneksid_hidden').value = checked.value;
+  document.getElementById('sga_nova_godina_hidden').value = godina;
+  document.getElementById('smeniGodinaAneksForm').submit();
 }
 </script>
 {% endif %}

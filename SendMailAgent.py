@@ -21,7 +21,8 @@ import locale
 
 
 # Register a font that supports Cyrillic
-pdfmetrics.registerFont(TTFont("DejaVuSans", "DejaVuSans.ttf"))
+_font_dir = os.path.join(os.path.dirname(__file__), "routers")
+pdfmetrics.registerFont(TTFont("DejaVuSans", os.path.join(_font_dir, "DejaVuSans.ttf")))
 
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4,A3
@@ -123,33 +124,34 @@ def generate_dynamic_pdf(output_path, mesec, godina, agent_name, agent_tim, agen
             sum(bod) bod,
              sum(naplata) naplata,br_rati,koja_godina, rata,tip_provizija
    from (
-   SELECT 
-            polisa_broj,
-            dogovoruvac_name,
-            TO_CHAR(skadenca_datum_od, '%d/%m/%Y') AS skadenca_datum_od,
-            TO_CHAR(skadenca_datum_do, '%d/%m/%Y') AS skadenca_datum_do,
-            premija_zivot AS LF_UL,
-            premija_nezgoda AS INN,
-            premija_zdravstveno AS ZD,
-            NVL(premija_tbs, 0) AS TBS,
-            ROUND(premija_zivot + premija_nezgoda + premija_zdravstveno + NVL(premija_tbs,0), 2) AS VKUPNO_PREMIJA,
-            TO_CHAR(dat_naplata, '%d/%m/%Y') AS datum_naplata,
-            TO_CHAR(skadenca_datum_od, '%d/%m/%Y') AS period_od,
-            TO_CHAR(skadenca_datum_do, '%d/%m/%Y') AS period_do,
-            case when tip_knizi='Премија за осигурување на живот' then  iznos_provizija else 0 end  AS prov_lf,
-            case when tip_knizi='Дополнително осигурување -незгода' then  iznos_provizija else 0 end AS prov_in,
-            case when tip_knizi='Дополнително осигурување -здравствено' then  iznos_provizija  else 0 end AS prov_zd,
-            case when tip_knizi='Дополнително осигурување -ТБС' then  iznos_provizija  else 0 end AS prov_tbs,
-            iznos_provizija  AS VKUPNO_PROVIZIJA,
-            br_bodovi,
-            bod,
-            naplata AS naplata,br_rati,koja_godina, rata,tip_provizija,tip_knizi
-        FROM 
-            agenti_provizija
-        WHERE 
-            mesec = {mesec}
-            AND godina = {godina}
-            AND par_agentid = {record[3]})a
+   SELECT
+            ap.polisa_broj,
+            ap.dogovoruvac_name,
+            TO_CHAR(ap.skadenca_datum_od, '%d/%m/%Y') AS skadenca_datum_od,
+            TO_CHAR(ap.skadenca_datum_do, '%d/%m/%Y') AS skadenca_datum_do,
+            ap.premija_zivot AS LF_UL,
+            ap.premija_nezgoda AS INN,
+            ap.premija_zdravstveno AS ZD,
+            NVL(ap.premija_tbs, 0) AS TBS,
+            ROUND(ap.premija_zivot + ap.premija_nezgoda + ap.premija_zdravstveno + NVL(ap.premija_tbs,0), 2) AS VKUPNO_PREMIJA,
+            TO_CHAR(ap.dat_naplata, '%d/%m/%Y') AS datum_naplata,
+            TO_CHAR(f.data_faktura, '%d/%m/%Y') AS period_od,
+            TO_CHAR(f.data_valuta,  '%d/%m/%Y') AS period_do,
+            CASE WHEN ap.tip_knizi='Премија за осигурување на живот'       THEN ap.iznos_provizija ELSE 0 END AS prov_lf,
+            CASE WHEN ap.tip_knizi='Дополнително осигурување -незгода'     THEN ap.iznos_provizija ELSE 0 END AS prov_in,
+            CASE WHEN ap.tip_knizi='Дополнително осигурување -здравствено' THEN ap.iznos_provizija ELSE 0 END AS prov_zd,
+            CASE WHEN ap.tip_knizi='Дополнително осигурување -ТБС'         THEN ap.iznos_provizija ELSE 0 END AS prov_tbs,
+            ap.iznos_provizija AS VKUPNO_PROVIZIJA,
+            ap.br_bodovi,
+            CASE WHEN ap.tip_knizi='Премија за осигурување на живот' THEN ap.bod ELSE 0 END AS bod,
+            ap.naplata, ap.br_rati, ap.koja_godina, ap.rata, ap.tip_provizija, ap.tip_knizi
+        FROM
+            agenti_provizija ap
+            JOIN viki.os_aneks_faktura f ON f.os_aneks_fakturaid = ap.os_aneks_fakturaid
+        WHERE
+            ap.mesec = {mesec}
+            AND ap.godina = {godina}
+            AND ap.par_agentid = {record[3]})a
             group by polisa_broj,
             dogovoruvac_name,
              skadenca_datum_od,
@@ -162,7 +164,7 @@ def generate_dynamic_pdf(output_path, mesec, godina, agent_name, agent_tim, agen
              datum_naplata,
              period_od,
             period_do, br_rati,koja_godina, rata,tip_provizija
-            order by polisa_broj
+            order by case tip_provizija when 'Лична' then 1 when 'Тимска' then 2 else 3 end, polisa_broj
    
     """
 
@@ -184,73 +186,110 @@ def generate_dynamic_pdf(output_path, mesec, godina, agent_name, agent_tim, agen
     # --- PDF title ---
     page2_title = Paragraph("Детали за Продажба", bold_style)
 
+    # --- Header styles ---
+    from reportlab.lib.styles import ParagraphStyle
+    hdr_style = ParagraphStyle('hdr',  fontName='DejaVuSans', fontSize=7, leading=8,
+                               wordWrap='CJK', alignment=1)
+    hdr_bold  = ParagraphStyle('hdrB', fontName='DejaVuSans', fontSize=7, leading=8,
+                               wordWrap='CJK', alignment=1, textColor=colors.black)
+
+    def _h(txt, bold=False):
+        return Paragraph(txt, hdr_bold if bold else hdr_style)
+
     # --- Header rows (grouped like Excel) ---
     page2_table = [
-        # Row 1 - group headers
+        # Row 1 - group headers (SPAN-ови дефинирани во TableStyle)
         [
-        Paragraph("", wrap_style),  # Tip provizija
-        Paragraph("", wrap_style),  # Полиса
-        Paragraph("", wrap_style),  # Договорувач
-        Paragraph("Премија", bold_style), "", "", "", "","",  # group 5
-        Paragraph("Период на уплата", bold_style), "",   # group 3
-        "","","",Paragraph("Провизија", bold_style), "", "", "",  # group 5
-        Paragraph("", wrap_style),  # Бодови
-        Paragraph("", wrap_style),  # Вредност бод
-        Paragraph("", wrap_style),  # Наплата
+        _h(""), _h(""), _h(""),                           # 0,1,2
+        _h("Годишна премија", True), "", "", "", "", "",   # 3-7  (SPAN 3-7)
+        _h("Период на уплата", True), "", "",              # 8-10 (SPAN 8-10)
+        "", "",
+        _h("Провизија", True), "", "", "", "",             # 14-18 (SPAN 14-18)
+        _h(""), _h(""), _h(""),                            # 19,20,21
         ],
-        # Row 2 - subheaders
+        # Row 2 - скратени поднаслови за да не прелеваат
         [
-            Paragraph("Тип на провизија", wrap_style),
-            Paragraph("Полиса", wrap_style),
-            Paragraph("Договорувач", wrap_style),
-            Paragraph("LF/UL", wrap_style),
-            Paragraph("IN", wrap_style),
-            Paragraph("ZD", wrap_style),
-            Paragraph("TBS", wrap_style),
-            Paragraph("Вкупно", wrap_style),
-            Paragraph("Датум на наплата", wrap_style),
-            Paragraph("Од", wrap_style),
-            Paragraph("До", wrap_style),
-            Paragraph("Број на рати", wrap_style),
-            Paragraph("Година на уплата", wrap_style),
-            Paragraph("Уплатена рата", wrap_style),
-            Paragraph("LF/UL", wrap_style),
-            Paragraph("IN", wrap_style),
-            Paragraph("ZD", wrap_style),
-            Paragraph("TBS", wrap_style),
-            Paragraph("Вкупно", wrap_style),
-            Paragraph("Бодови", wrap_style),
-            Paragraph("Вредност бод", wrap_style),
-            Paragraph("Наплата", wrap_style),
+            _h("Тип"),
+            _h("Полиса"),
+            _h("Договорувач"),
+            _h("LF/UL"), _h("IN"), _h("ZD"), _h("TBS"), _h("Вкупно"),
+            _h("Датум напл."),
+            _h("Од"), _h("До"),
+            _h("Бр. рати"), _h("Год. упл."), _h("Rata"),
+            _h("LF/UL"), _h("IN"), _h("ZD"), _h("TBS"), _h("Вкупно"),
+            _h("Бодови"), _h("Вред. бод"), _h("Наплата"),
         ]
     ]
+
+    # --- Cell styles ---
+    cell_style = ParagraphStyle(
+        'cell', fontName='DejaVuSans', fontSize=7, leading=9, wordWrap='CJK', alignment=0  # LEFT
+    )
+    cell_style_r = ParagraphStyle(
+        'cellR', fontName='DejaVuSans', fontSize=7, leading=9, wordWrap='CJK', alignment=2  # RIGHT
+    )
+    cell_style_c = ParagraphStyle(
+        'cellC', fontName='DejaVuSans', fontSize=7, leading=9, wordWrap='CJK', alignment=1  # CENTER
+    )
+    def _p(val, align='L'):
+        s = cell_style_r if align == 'R' else (cell_style_c if align == 'C' else cell_style)
+        return Paragraph(str(val) if val is not None else '', s)
 
     # --- Add data rows ---
     for row in analitika1:
         page2_table.append([
-            row[23], # Tip provizija
-            row[0],  # Полиса
-            row[1],  # Договорувач
-            row[4],  # LF/UL
-            row[5],  # IN
-            row[6],  # ZD
-            row[7],  # TBS
-            row[8],  # Вкупно премија
-            row[9],  # Датум на наплата
-            row[10], # Од
-            row[11], # До
-            row[20], # Број на рати
-            row[21], # Година на уплата
-            row[22], # Уплатена рата
-            row[12], # Prov LF
-            row[13], # Prov IN
-            row[14], # Prov ZD
-            row[15], # Prov TBS
-            row[16], # Вкупно провизија
-            row[17], # Бодови
-            row[18], # Вредност бод
-            row[19], # Наплата
+            _p(row[23], 'C'), # Тип
+            _p(row[0],  'C'), # Полиса
+            _p(row[1],  'L'), # Договорувач
+            _p(row[4],  'R'), # LF/UL премија
+            _p(row[5],  'R'), # IN премија
+            _p(row[6],  'R'), # ZD премија
+            _p(row[7],  'R'), # TBS премија
+            _p(row[8],  'R'), # Вкупно премија
+            _p(row[9],  'C'), # Датум на наплата
+            _p(row[10], 'C'), # Од
+            _p(row[11], 'C'), # До
+            _p(row[20], 'R'), # Број на рати
+            _p(row[21], 'R'), # Година на уплата
+            _p(row[22], 'R'), # Rata
+            _p(row[12], 'R'), # Prov LF
+            _p(row[13], 'R'), # Prov IN
+            _p(row[14], 'R'), # Prov ZD
+            _p(row[15], 'R'), # Prov TBS
+            _p(row[16], 'R'), # Вкупно провизија
+            _p(row[17], 'R'), # Бодови
+            _p(row[18], 'R'), # Вредност бод
+            _p(row[19], 'R'), # Наплата
         ])
+
+    # --- Збир ред ---
+    def _flt(v):
+        try: return float(v or 0)
+        except: return 0.0
+    def _fmt(v): return round(v, 2) if v != 0 else 0
+
+    tot_lf_pr  = sum(_flt(r[12]) for r in analitika1)
+    tot_in_pr  = sum(_flt(r[13]) for r in analitika1)
+    tot_zd_pr  = sum(_flt(r[14]) for r in analitika1)
+    tot_tbs_pr = sum(_flt(r[15]) for r in analitika1)
+    tot_vk_pr  = sum(_flt(r[16]) for r in analitika1)
+    cell_bold = ParagraphStyle('cellB', fontName='DejaVuSans', fontSize=7, leading=9,
+                               wordWrap='CJK', alignment=2, textColor=colors.black)
+    cell_bold_l = ParagraphStyle('cellBL', fontName='DejaVuSans', fontSize=7, leading=9,
+                                 wordWrap='CJK', alignment=0, textColor=colors.black)
+    def _pb(val, align='R'):
+        s = cell_bold if align == 'R' else cell_bold_l
+        return Paragraph(str(val) if val is not None else '', s)
+
+    page2_table.append([
+        _pb("ВКУПНО", 'L'), _pb("", 'L'), _pb("", 'L'),
+        _pb("", 'L'), _pb("", 'L'), _pb("", 'L'), _pb("", 'L'), _pb("", 'L'),
+        _pb("", 'L'), _pb("", 'L'), _pb("", 'L'),
+        _pb("", 'L'), _pb("", 'L'), _pb("", 'L'),
+        _pb(_fmt(tot_lf_pr)), _pb(_fmt(tot_in_pr)),
+        _pb(_fmt(tot_zd_pr)), _pb(_fmt(tot_tbs_pr)), _pb(_fmt(tot_vk_pr)),
+        _pb("", 'L'), _pb("", 'L'), _pb("", 'L'),
+    ])
 
     # # --- Create PDF ---
     # landscape_pdf_path = "detali_prodazba.pdf"
@@ -373,7 +412,17 @@ def generate_dynamic_pdf(output_path, mesec, godina, agent_name, agent_tim, agen
     portrait_pdf.build(portrait_elements, onFirstPage=lambda canvas_obj, doc: draw_first_page(canvas_obj, doc, background_image_path))
 
     
-    table1 = Table(page2_table, repeatRows=2, colWidths=[70,	70,	150,	40,	40,	40,	40,	40,	50,	50,	50,	40,	40,	40,	40,	40,	40,	40,	40,	40,	40,	40])
+    # колони: Тип, Полиса, Договорувач, LF, IN, ZD, TBS, Вкупно, ДатНапл, Од, До, БрРати, Год, Rata, LF, IN, ZD, TBS, Вкупно, Бодови, ВредБод, Наплата
+    # A3 landscape ~1190pt, margins 15+15=30 → usable ~1160pt; sum below = 1118pt
+    # Датумски колони ширини 68pt за "01/06/2025" во еден ред при fontSize=7
+    table1 = Table(page2_table, repeatRows=2, colWidths=[
+        50, 62, 140,                    # Тип, Полиса, Договорувач
+        38, 34, 34, 34, 50,             # Премија: LF, IN, ZD, TBS, Вкупно
+        68, 68, 68,                     # Период: ДатНапл, Од, До  (68pt = 1 ред за "01/06/2025")
+        32, 30, 30,                     # Бр.рати, Год.упл, Rata
+        38, 34, 34, 34, 50,             # Провизија: LF, IN, ZD, TBS, Вкупно
+        34, 40, 46,                     # Бодови, Вред.бод, Наплата
+    ])
 
 # Style the table
     table_style = TableStyle([
@@ -388,26 +437,46 @@ def generate_dynamic_pdf(output_path, mesec, godina, agent_name, agent_tim, agen
     ('TOPPADDING', (0, 0), (-1, 1), 5),
 
     # --- MERGED HEADER CELLS ---
-    ('SPAN', (3, 0), (7, 0)),   # Премија covers LF/UL–Вкупно
-    ('SPAN', (9, 0), (10, 0)),   # Период на уплата covers Од–До
-    ('SPAN', (14, 0), (18, 0)),  # Провизија covers LF/UL–Наплата
+    ('SPAN', (3, 0), (7, 0)),    # Премија: LF/UL–Вкупно (5 cols)
+    ('SPAN', (8, 0), (10, 0)),   # Период на уплата: ДатумНапл–Од–До (3 cols)
+    ('SPAN', (14, 0), (18, 0)),  # Провизија: LF/UL–Вкупно (5 cols)
 
     # BODY STYLE
     ('BACKGROUND', (0, 2), (-1, -1), colors.white),
     ('ALIGN', (0, 2), (-1, -1), 'CENTER'),
-    ('VALIGN', (0, 2), (-1, -1), 'MIDDLE'),
+    ('ALIGN', (2, 2), (2, -1), 'LEFT'),    # Договорувач — лево
+    # Десно порамнување за сите нумерички колони
+    ('ALIGN', (3, 2), (7, -1), 'RIGHT'),   # Годишна премија: LF, IN, ZD, TBS, Вкупно
+    ('ALIGN', (11, 2), (13, -1), 'RIGHT'), # Бр.рати, Год.упл, Rata
+    ('ALIGN', (14, 2), (21, -1), 'RIGHT'), # Провизија + Бодови + Вред.бод + Наплата
+    ('VALIGN', (0, 2), (-1, -1), 'TOP'),
     ('FONTNAME', (0, 2), (-1, -1), 'DejaVuSans'),
     ('FONTSIZE', (0, 2), (-1, -1), 7),
+    ('TOPPADDING', (0, 2), (-1, -1), 3),
+    ('BOTTOMPADDING', (0, 2), (-1, -1), 3),
 
     # GRID
     ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+
+    # ЗБИР РЕД — последен ред
+    ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+    ('FONTNAME', (0, -1), (-1, -1), 'DejaVuSans'),
+    ('FONTSIZE', (0, -1), (-1, -1), 7),
+    ('TOPPADDING', (0, -1), (-1, -1), 4),
+    ('BOTTOMPADDING', (0, -1), (-1, -1), 4),
+    ('LINEABOVE', (0, -1), (-1, -1), 1, colors.black),
     ])
 
 
 
     table1.setStyle(table_style)
     landscape_pdf_path = "landscape_temp.pdf"
-    landscape_pdf = SimpleDocTemplate(landscape_pdf_path, pagesize=landscape(A3))
+    landscape_pdf = SimpleDocTemplate(
+        landscape_pdf_path,
+        pagesize=landscape(A3),
+        leftMargin=15, rightMargin=15,
+        topMargin=20, bottomMargin=15,
+    )
     
     landscape_elements = [
         page2_title,

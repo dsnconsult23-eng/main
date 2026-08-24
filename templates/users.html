@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Корисници{% endblock %}
+
+{% block content %}
+<style>
+  .users-page {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .users-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    background: #fff;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+  }
+
+  .users-toolbar h1 {
+    margin: 0;
+    color: #203040;
+    font-size: 1.35rem;
+  }
+
+  .users-card {
+    overflow-x: auto;
+    background: #fff;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: .75rem;
+    border-bottom: 1px solid #e7edf3;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .users-table th {
+    background: #f7fafc;
+    color: #405060;
+    font-size: .85rem;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: .2rem .5rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: .78rem;
+  }
+
+  .status-active {
+    background: #eafaf1;
+    color: #1e8449;
+  }
+
+  .status-inactive {
+    background: #fdecea;
+    color: #c0392b;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: .55rem .8rem;
+    border-radius: 6px;
+    background: #3498db;
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .btn-secondary {
+    background: #607080;
+  }
+
+  .alert {
+    padding: .8rem 1rem;
+    border-radius: 6px;
+    background: #eafaf1;
+    color: #1e8449;
+  }
+</style>
+
+<div class="users-page">
+  <div class="users-toolbar">
+    <h1>Корисници</h1>
+    <a class="btn" href="/siglife-report/users/create">Креирај корисник</a>
+  </div>
+
+  {% if success %}
+    <div class="alert">{{ success }}</div>
+  {% endif %}
+
+  <div class="users-card">
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Име и презиме</th>
+          <th>Улоги</th>
+          <th>Статус</th>
+          <th>Креиран</th>
+          <th>Промена</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in users %}
+          <tr>
+            <td>{{ item.id }}</td>
+            <td>{{ item.username }}</td>
+            <td>{{ item.full_name }}</td>
+            <td>{{ item.roles_display or "-" }}</td>
+            <td>
+              {% if item.is_active == 1 %}
+                <span class="status-badge status-active">Активен</span>
+              {% else %}
+                <span class="status-badge status-inactive">Неактивен</span>
+              {% endif %}
+            </td>
+            <td>{{ item.created_at or "-" }}</td>
+            <td><a class="btn btn-secondary" href="/siglife-report/users/{{ item.id }}/edit">Промена</a></td>
+          </tr>
+        {% endfor %}
+
+        {% if not users %}
+          <tr>
+            <td colspan="7">Нема корисници за приказ.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

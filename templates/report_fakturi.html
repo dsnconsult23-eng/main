@@ -1,0 +1,919 @@
+{% extends "base.html" %}
+{% block title %}Преглед на фактури{% endblock %}
+
+{% block content %}
+<div class="page-title">Преглед на фактури</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════
+   FILTER FORM
+══════════════════════════════════════════════════════════════════ #}
+<div class="card" style="margin-bottom:1rem;">
+  <form method="post" action="/siglife-report/report-fakturi" id="filterForm">
+
+    {# ── Row 1: text fields ── #}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:.6rem 1rem; margin-bottom:.75rem;">
+      <div class="form-group" style="margin:0">
+        <label>Клиент</label>
+        <div style="display:flex; gap:.3rem;">
+          <input type="text" name="klient" id="fld_klient" value="{{ f.klient or '' }}" placeholder="Назив..." style="flex:1;">
+          <button type="button" class="btn btn-secondary" style="padding:.4rem .6rem;"
+                  onclick="openClientSearch('fld_klient')" title="Пребарај клиент">🔍</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Фактура</label>
+        <input type="text" name="faktura" value="{{ f.faktura or '' }}" placeholder="Број на фактура...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Тип на книжење</label>
+        <input type="text" name="tip_knizi" value="{{ f.tip_knizi or '' }}" placeholder="Тип...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Полиса број</label>
+        <input type="text" name="polisa_broj" value="{{ f.polisa_broj or '' }}"
+               placeholder="пр. 19/000123 или 19/000123, 20/003877"
+               title="Може да внесете повеќе полиси разделени со запирка">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Брокер</label>
+        <input type="text" name="broker" value="{{ f.broker or '' }}" placeholder="Назив...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Агент</label>
+        <input type="text" name="agent" value="{{ f.agent or '' }}" placeholder="Назив...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Посредник</label>
+        <input type="text" name="posrednik" value="{{ f.posrednik or '' }}" placeholder="Назив...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Промотор</label>
+        <input type="text" name="promotor" value="{{ f.promotor or '' }}" placeholder="Назив...">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Клиент Административна забрана</label>
+        <div style="display:flex; gap:.3rem;">
+          <input type="text" name="admin_zabrana_klient" id="fld_admin_zabrana_klient"
+                 value="{{ f.admin_zabrana_klient or '' }}"
+                 placeholder="Назив на клиент (Синт. картица)..." style="flex:1;">
+          <button type="button" class="btn btn-secondary" style="padding:.4rem .6rem;"
+                  onclick="openClientSearch('fld_admin_zabrana_klient')" title="Пребарај клиент">🔍</button>
+        </div>
+      </div>
+    </div>
+
+    {# ── Row 2: amount ranges ── #}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.6rem 1rem; margin-bottom:.75rem;">
+      <div class="form-group" style="margin:0">
+        <label>Износ од</label>
+        <input type="number" step="0.01" name="iznos_od" value="{{ f.iznos_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Износ до</label>
+        <input type="number" step="0.01" name="iznos_do" value="{{ f.iznos_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Износ денари од</label>
+        <input type="number" step="0.01" name="iznos_den_od" value="{{ f.iznos_den_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Износ денари до</label>
+        <input type="number" step="0.01" name="iznos_den_do" value="{{ f.iznos_den_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Наплата од</label>
+        <input type="number" step="0.01" name="naplata_od" value="{{ f.naplata_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Наплата до</label>
+        <input type="number" step="0.01" name="naplata_do" value="{{ f.naplata_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Наплата денари од</label>
+        <input type="number" step="0.01" name="naplata_den_od" value="{{ f.naplata_den_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Наплата денари до</label>
+        <input type="number" step="0.01" name="naplata_den_do" value="{{ f.naplata_den_do or '' }}">
+      </div>
+    </div>
+
+    {# ── Row 3: date ranges (dd/mm/yyyy текст-маска, независно од browser locale) ── #}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.6rem 1rem; margin-bottom:.75rem;">
+      <div class="form-group" style="margin:0">
+        <label>Датум анекс од</label>
+        <input type="text" class="date-mask" data-iso-target="datum_aneks_od" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_aneks_od" id="h_datum_aneks_od" value="{{ f.datum_aneks_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум анекс до</label>
+        <input type="text" class="date-mask" data-iso-target="datum_aneks_do" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_aneks_do" id="h_datum_aneks_do" value="{{ f.datum_aneks_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум валута од</label>
+        <input type="text" class="date-mask" data-iso-target="datum_valuta_od" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_valuta_od" id="h_datum_valuta_od" value="{{ f.datum_valuta_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум валута до</label>
+        <input type="text" class="date-mask" data-iso-target="datum_valuta_do" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_valuta_do" id="h_datum_valuta_do" value="{{ f.datum_valuta_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум фактура од</label>
+        <input type="text" class="date-mask" data-iso-target="datum_faktura_od" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_faktura_od" id="h_datum_faktura_od" value="{{ f.datum_faktura_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум фактура до</label>
+        <input type="text" class="date-mask" data-iso-target="datum_faktura_do" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_faktura_do" id="h_datum_faktura_do" value="{{ f.datum_faktura_do or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум книжење од</label>
+        <input type="text" class="date-mask" data-iso-target="datum_knizi_od" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_knizi_od" id="h_datum_knizi_od" value="{{ f.datum_knizi_od or '' }}">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Датум книжење до</label>
+        <input type="text" class="date-mask" data-iso-target="datum_knizi_do" placeholder="дд/мм/гггг" maxlength="10" autocomplete="off">
+        <input type="hidden" name="datum_knizi_do" id="h_datum_knizi_do" value="{{ f.datum_knizi_do or '' }}">
+      </div>
+    </div>
+
+    {# ── Row 4: checkboxes + radios + level ── #}
+    <div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:flex-start; margin-bottom:.75rem;">
+
+      {# Продажен канал #}
+      <div>
+        <label style="margin-bottom:.4rem;">Продажен канал</label>
+        <div style="display:flex; flex-direction:column; gap:.25rem;">
+          {% for k in prodazni_kanali %}
+          <label style="font-size:.82rem; text-transform:none; font-weight:500; letter-spacing:0; display:flex; align-items:center; gap:.4rem; color:#34495e;">
+            <input type="checkbox" name="kanali" value="{{ k }}"
+              {% if f.kanali and k in f.kanali %}checked{% endif %}
+              style="width:auto; margin:0; padding:0; border:none; background:none;">
+            {{ k }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Клиент тип #}
+      <div>
+        <label style="margin-bottom:.4rem;">Клиент</label>
+        <div style="display:flex; flex-direction:column; gap:.25rem;">
+          {% for val, lbl in [('site','Сите'),('Правно','Правно'),('Физичко','Физичко')] %}
+          <label style="font-size:.82rem; text-transform:none; font-weight:500; letter-spacing:0; display:flex; align-items:center; gap:.4rem; color:#34495e;">
+            <input type="radio" name="klient_tip" value="{{ val }}"
+              {% if (f.klient_tip or 'site') == val %}checked{% endif %}
+              style="width:auto; margin:0; padding:0; border:none; background:none;">
+            {{ lbl }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Доспеана ненаплатена премија #}
+      <div style="display:flex; flex-direction:column; gap:.5rem;">
+        <label style="font-size:.82rem; text-transform:none; font-weight:500; letter-spacing:0; display:flex; align-items:center; gap:.4rem; color:#34495e;">
+          <input type="checkbox" name="dospeana" value="1" id="cb_dospeana"
+            {% if f.dospeana %}checked{% endif %}
+            style="width:auto; margin:0; padding:0; border:none; background:none;"
+            onchange="dospeanaToggle(this)">
+          Доспеана ненаплатена премија
+        </label>
+        <label style="font-size:.82rem; text-transform:none; font-weight:500; letter-spacing:0; display:flex; align-items:center; gap:.4rem; color:#34495e;">
+          <input type="checkbox" name="samo_admin_zabrana" value="1"
+            {% if f.samo_admin_zabrana %}checked{% endif %}
+            style="width:auto; margin:0; padding:0; border:none; background:none;">
+          Само со административна забрана (Синт. картица)
+        </label>
+      </div>
+
+      {# Ниво на приказ #}
+      <div>
+        <label style="margin-bottom:.4rem;">Ниво на приказ</label>
+        <div style="display:flex; flex-direction:column; gap:.25rem;">
+          {% for val, lbl in [('polisa','По полиса'),('faktura','По фактури'),('red','По ред'),('sintetika','Синтетичка картица')] %}
+          <label style="font-size:.82rem; text-transform:none; font-weight:500; letter-spacing:0; display:flex; align-items:center; gap:.4rem; color:#34495e;">
+            <input type="radio" name="nivo" value="{{ val }}"
+              {% if (nivo or 'polisa') == val %}checked{% endif %}
+              style="width:auto; margin:0; padding:0; border:none; background:none;">
+            {{ lbl }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    {# ── Action buttons ── #}
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-primary">🔎 Прегледај</button>
+      <a href="/siglife-report/report-fakturi" class="btn btn-secondary">✕ Исчисти</a>
+      <button type="submit"
+              formaction="/siglife-report/report-fakturi/sintetika-pdf"
+              formtarget="_blank"
+              class="btn btn-success">
+        🖶 Печати синтетичка картица
+      </button>
+      <button type="submit"
+              formaction="/siglife-report/report-fakturi/sintetika-excel"
+              class="btn btn-success">
+        📥 Синтетичка картица — Excel
+      </button>
+      {% if searched and rows %}
+      <button type="submit" form="excelForm" class="btn btn-success">📥 Excel</button>
+      {% endif %}
+    </div>
+  </form>
+
+  {# Hidden form for Excel export — same fields, different action #}
+  {% if searched and rows %}
+  <form id="excelForm" method="post" action="/siglife-report/report-fakturi/excel" style="display:none">
+    {% for k, v in f.items() %}
+      {% if v is iterable and v is not string %}
+        {% for item in v %}<input type="hidden" name="{{ k }}" value="{{ item }}">{% endfor %}
+      {% else %}
+        <input type="hidden" name="{{ k }}" value="{{ v or '' }}">
+      {% endif %}
+    {% endfor %}
+  </form>
+  {% endif %}
+</div>
+
+{# ══════════════════════════════════════════════════════════════════
+   RESULTS
+══════════════════════════════════════════════════════════════════ #}
+{% if searched and rows is not none %}
+  {% if not rows %}
+  <div class="alert alert-info">Нема резултати за зададените филтри.</div>
+  {% else %}
+
+  {# Summary line #}
+  <div style="font-size:.82rem; color:#5d6d7e; margin-bottom:.6rem;">
+    Прикажани: <strong>{{ rows|length }}</strong> записи
+    {% if rows|length == 2000 %}&nbsp;(лимит 2 000 — додај филтри за прецизирање){% endif %}
+    &nbsp;·&nbsp;
+    Вк. Износ: <strong>
+      {% if nivo == 'red' %}{{ "%.2f"|format(totals.iznos) }}{% else %}{{ "%.2f"|format(totals.vk_iznos) }}{% endif %}
+    </strong>
+    &nbsp;·&nbsp; Салдо: <strong>{{ "%.2f"|format(totals.saldo) }}</strong>
+  </div>
+
+  {# ── По полиса ── #}
+  {% if nivo == 'polisa' %}
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table id="tblPolisa">
+      <thead>
+        <tr>
+          <th style="width:32px"></th>
+          <th>Полиса</th>
+          <th>Клиент</th>
+          <th style="text-align:right">Вк. Износ</th>
+          <th style="text-align:right">Вк. Износ (ден.)</th>
+          <th style="text-align:right">Вк. Наплата</th>
+          <th style="text-align:right">Вк. Наплата (ден.)</th>
+          <th style="text-align:right">Салдо</th>
+          <th>Клиент Административна забрана</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr class="polisa-row" data-polisa="{{ r.polisa_broj }}">
+          <td style="text-align:center; cursor:pointer;" onclick="togglePolisa(this, '{{ r.polisa_broj }}')" title="Прикажи фактури">
+            <span class="exp-icon">▶</span>
+          </td>
+          <td><strong>{{ r.polisa_broj }}</strong></td>
+          <td>{{ r.client_naziv }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_iznos_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_naplata) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_naplata_den) }}</td>
+          <td style="text-align:right; {% if r.saldo > 0.005 %}color:#c0392b; font-weight:600{% elif r.saldo < -0.005 %}color:#27ae60{% endif %}">
+            {{ "%.2f"|format(r.saldo) }}
+          </td>
+          <td>{% if r.admin_zabrana_naziv %}<span style="color:#c0392b;">⚠ {{ r.admin_zabrana_naziv }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="font-weight:700; background:#eef4fb;">
+          <td></td>
+          <td colspan="2">ВКУПНО</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.vk_iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.vk_iznos_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.vk_naplata) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.vk_naplata_den) }}</td>
+          <td style="text-align:right; font-weight:700">{{ "%.2f"|format(totals.saldo) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+
+  {# ── По фактури ── #}
+  {% if nivo == 'faktura' %}
+  <form id="zatvaranjeForm" method="post" action="/siglife-report/report-fakturi/excel-zatvaranje">
+    {% for k, v in f.items() %}
+      {% if v is iterable and v is not string %}
+        {% for item in v %}<input type="hidden" name="{{ k }}" value="{{ item }}">{% endfor %}
+      {% else %}
+        <input type="hidden" name="{{ k }}" value="{{ v or '' }}">
+      {% endif %}
+    {% endfor %}
+
+    <div style="display:flex; gap:.6rem; margin-bottom:.6rem; align-items:center; flex-wrap:wrap;">
+      <button type="button" onclick="selAll(true)" class="btn btn-secondary" style="font-size:.8rem; padding:.3rem .7rem;">☑ Избери сите без наплата</button>
+      <button type="button" onclick="selAll(false)" class="btn btn-secondary" style="font-size:.8rem; padding:.3rem .7rem;">☐ Откажи избор</button>
+      <button type="submit" class="btn btn-warning" style="font-size:.8rem; padding:.3rem .7rem;" onclick="return confirmSel()">📥 Excel – Затварање</button>
+      <span id="selCount" style="font-size:.82rem; color:#5d6d7e;"></span>
+    </div>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px; text-align:center">✓</th>
+            <th style="width:32px"></th>
+            <th>Полиса</th>
+            <th>Клиент</th>
+            <th>Фактура</th>
+            <th>Дат. Фактура</th>
+            <th>Тип</th>
+            <th style="text-align:right">Износ</th>
+            <th style="text-align:right">Износ (ден.)</th>
+            <th style="text-align:right">Наплата</th>
+            <th style="text-align:right">Наплата (ден.)</th>
+            <th style="text-align:right">Салдо</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in rows %}
+          <tr class="faktura-row {% if r.vk_naplata < 0.005 %}row-no-payment{% endif %}"
+              data-polisa="{{ r.polisa_broj }}" data-faktura="{{ r.faktura }}">
+            <td style="text-align:center">
+              <input type="checkbox" name="sel_faktura" value="{{ r.faktura }}|{{ r.polisa_broj }}"
+                class="sel-cb"
+                {% if r.vk_naplata < 0.005 %}data-no-payment="1"{% endif %}
+                style="width:auto; margin:0; padding:0; border:none; background:none;"
+                onchange="updateCount()">
+            </td>
+            <td style="text-align:center; cursor:pointer;" onclick="toggleFaktura(this, '{{ r.polisa_broj }}', '{{ r.faktura }}')" title="Прикажи редови">
+              <span class="exp-icon">▶</span>
+            </td>
+            <td>{{ r.polisa_broj }}</td>
+            <td>{{ r.client_naziv }}</td>
+            <td><strong>{{ r.faktura }}</strong></td>
+            <td>{{ r.data_faktura }}</td>
+            <td>{{ r.tip_knizi }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.vk_iznos) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.vk_iznos_den) }}</td>
+            <td style="text-align:right; {% if r.vk_naplata < 0.005 %}color:#c0392b{% endif %}">
+              {{ "%.2f"|format(r.vk_naplata) }}
+            </td>
+            <td style="text-align:right">{{ "%.2f"|format(r.vk_naplata_den) }}</td>
+            <td style="text-align:right; font-weight:600;
+              {% if r.saldo > 0.005 %}color:#c0392b{% elif r.saldo < -0.005 %}color:#27ae60{% endif %}">
+              {{ "%.2f"|format(r.saldo) }}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="font-weight:700; background:#eef4fb;">
+            <td></td>
+            <td></td>
+            <td colspan="5">ВКУПНО</td>
+            <td style="text-align:right">{{ "%.2f"|format(totals.vk_iznos) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(totals.vk_iznos_den) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(totals.vk_naplata) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(totals.vk_naplata_den) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(totals.saldo) }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </form>
+  {% endif %}
+
+  {# ── По ред ── #}
+  {% if nivo == 'red' %}
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Полиса</th>
+          <th>Клиент</th>
+          <th>Фактура</th>
+          <th>Рат.</th>
+          <th>Дат. Фактура</th>
+          <th>Дат. Валута</th>
+          <th>Тип</th>
+          <th style="text-align:right">Износ</th>
+          <th style="text-align:right">Износ (ден.)</th>
+          <th style="text-align:right">Наплата</th>
+          <th style="text-align:right">Наплата (ден.)</th>
+          <th style="text-align:right">Салдо</th>
+          <th>Брокер</th>
+          <th>Агент</th>
+          <th>Посредник</th>
+          <th>Прод. Канал</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.polisa_broj }}</td>
+          <td>{{ r.client_naziv }}</td>
+          <td>{{ r.faktura }}</td>
+          <td style="text-align:center">{{ r.rata }}</td>
+          <td>{{ r.data_faktura }}</td>
+          <td>{{ r.data_valuta }}</td>
+          <td>{{ r.tip_knizi }}</td>
+          <td style="text-align:right; {% if r.iznos < 0 %}color:#c0392b{% endif %}">{{ "%.2f"|format(r.iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.iznos_den) }}</td>
+          <td style="text-align:right; {% if r.naplata < 0.005 %}color:#c0392b{% endif %}">{{ "%.2f"|format(r.naplata) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.naplata_den) }}</td>
+          <td style="text-align:right; font-weight:600;
+            {% if r.saldo > 0.005 %}color:#c0392b{% elif r.saldo < -0.005 %}color:#27ae60{% endif %}">
+            {{ "%.2f"|format(r.saldo) }}
+          </td>
+          <td>{{ r.broker }}</td>
+          <td>{{ r.agent }}</td>
+          <td>{{ r.posrednik }}</td>
+          <td>{{ r.prodazen_kanal }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="font-weight:700; background:#eef4fb;">
+          <td colspan="7">ВКУПНО</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.iznos_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.naplata) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.naplata_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(totals.saldo) }}</td>
+          <td colspan="4"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end rows #}
+{% endif %}{# end searched #}
+
+{# ══════════════════════════════════════════════════════════════════
+   RESULTS — Синтетичка картица (групирано, со подсуми како PDF)
+══════════════════════════════════════════════════════════════════ #}
+{% if searched and sintetika_groups is not none %}
+  {% if not sintetika_groups %}
+  <div class="alert alert-info">Нема резултати за зададените филтри.</div>
+  {% else %}
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.6rem;" class="no-print">
+    <div style="font-size:.82rem; color:#5d6d7e;">
+      Групи (клиент/фактура): <strong>{{ sintetika_groups|length }}</strong>
+      &nbsp;·&nbsp; Вкупно Салдо: <strong>{{ "%.2f"|format(sintetika_grand.saldo) }}</strong>
+    </div>
+    <button type="button" class="btn btn-secondary" onclick="window.print()">🖶 Печати</button>
+    <button type="submit" form="sintetikaPdfForm" class="btn btn-success">📄 PDF</button>
+    <button type="submit" form="sintetikaExcelForm" class="btn btn-success">📥 Синтетичка картица — Excel</button>
+  </div>
+
+  <form id="sintetikaPdfForm" method="post" action="/siglife-report/report-fakturi/sintetika-pdf" target="_blank" style="display:none">
+    <input type="hidden" name="polisa_broj" value="{{ f.polisa_broj or '' }}">
+    <input type="hidden" name="klient" value="{{ f.klient or '' }}">
+    <input type="hidden" name="klient_tip" value="{{ f.klient_tip or 'site' }}">
+    <input type="hidden" name="samo_admin_zabrana" value="{{ '1' if f.samo_admin_zabrana else '' }}">
+    <input type="hidden" name="admin_zabrana_klient" value="{{ f.admin_zabrana_klient or '' }}">
+  </form>
+
+  <form id="sintetikaExcelForm" method="post" action="/siglife-report/report-fakturi/sintetika-excel" style="display:none">
+    <input type="hidden" name="polisa_broj" value="{{ f.polisa_broj or '' }}">
+    <input type="hidden" name="klient" value="{{ f.klient or '' }}">
+    <input type="hidden" name="klient_tip" value="{{ f.klient_tip or 'site' }}">
+    <input type="hidden" name="samo_admin_zabrana" value="{{ '1' if f.samo_admin_zabrana else '' }}">
+    <input type="hidden" name="admin_zabrana_klient" value="{{ f.admin_zabrana_klient or '' }}">
+  </form>
+
+  <div class="card sintetika-print" style="padding:1rem;">
+    <h3 style="margin-bottom:1rem;">СИНТЕТИЧКА КАРТИЦА НА ФАКТУРИРАНА И НАПЛАТЕНА ПРЕМИЈА</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Полиса број</th>
+          <th>Фактура</th>
+          <th>Датум</th>
+          <th>Датум книжи</th>
+          <th style="text-align:right">Износ д.</th>
+          <th style="text-align:right">Износ п.</th>
+          <th style="text-align:right">Износ д.д.</th>
+          <th style="text-align:right">Износ п.д.</th>
+          <th style="text-align:right">Салдо</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in sintetika_groups %}
+        <tr>
+          <td colspan="9" style="padding-top:.8rem;">
+            <strong>Клиент:</strong> {{ c.client_id }} {{ c.client_naziv }}
+            {% if c.admin_zabrana_naziv %}
+            &nbsp;<span style="color:#c0392b;">⚠ Административна забрана: {{ c.admin_zabrana_naziv }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% for fg in c.faktura_groups %}
+          {% for r in fg.rows %}
+          <tr>
+            <td>{{ fg.polisa }}</td>
+            <td>{{ fg.faktura }}</td>
+            <td>{{ r.datum }}</td>
+            <td>{{ r.datum_knizi }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.iznos_d) if r.iznos_d else "" }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.iznos_p) if r.iznos_p else "" }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.iznos_d_den) if r.iznos_d_den else "" }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(r.iznos_p_den) if r.iznos_p_den else "" }}</td>
+            <td></td>
+          </tr>
+          {% endfor %}
+          <tr style="font-weight:700; background:#f5f8fb;">
+            <td colspan="4" style="text-align:right;">Вкупно :</td>
+            <td style="text-align:right">{{ "%.2f"|format(fg.subtotal.iznos_d) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(fg.subtotal.iznos_p) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(fg.subtotal.iznos_d_den) }}</td>
+            <td style="text-align:right">{{ "%.2f"|format(fg.subtotal.iznos_p_den) }}</td>
+            <td style="text-align:right; {% if fg.subtotal.saldo > 0.005 %}color:#c0392b{% elif fg.subtotal.saldo < -0.005 %}color:#27ae60{% endif %}">
+              {{ "%.2f"|format(fg.subtotal.saldo) }}
+            </td>
+          </tr>
+        {% endfor %}
+        <tr style="font-weight:700; background:#dfeaf5;">
+          <td colspan="4" style="text-align:right;">Вкупно за клиент :</td>
+          <td style="text-align:right">{{ "%.2f"|format(c.subtotal.iznos_d) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(c.subtotal.iznos_p) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(c.subtotal.iznos_d_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(c.subtotal.iznos_p_den) }}</td>
+          <td style="text-align:right; {% if c.subtotal.saldo > 0.005 %}color:#c0392b{% elif c.subtotal.saldo < -0.005 %}color:#27ae60{% endif %}">
+            {{ "%.2f"|format(c.subtotal.saldo) }}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="font-weight:700; background:#eef4fb;">
+          <td colspan="4" style="text-align:right;">ВКУПНО :</td>
+          <td style="text-align:right">{{ "%.2f"|format(sintetika_grand.iznos_d) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(sintetika_grand.iznos_p) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(sintetika_grand.iznos_d_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(sintetika_grand.iznos_p_den) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(sintetika_grand.saldo) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {% endif %}
+{% endif %}{# end sintetika #}
+
+<style>
+  @media print {
+    .no-print, .sidebar, form { display: none !important; }
+    .sintetika-print { box-shadow:none !important; border:none !important; }
+  }
+</style>
+
+<style>
+  .row-no-payment { background: #fff8f8; }
+  .row-no-payment:hover { background: #fdecea !important; }
+  .exp-icon { font-size:.7rem; color:#7f8c8d; user-select:none; }
+  .sub-faktura-row td { background:#f0f6ff; font-size:.82rem; padding:.4rem .8rem !important; }
+  .sub-faktura-row td:first-child { border-left:3px solid #3498db; }
+  .sub-red-row td { background:#f6fff0; font-size:.82rem; padding:.35rem .8rem !important; }
+  .sub-red-row td:first-child { border-left:3px solid #27ae60; }
+  .sub-loading td { color:#aaa; font-style:italic; }
+</style>
+
+<script>
+/* ── дд/мм/гггг датумска маска (независно од browser locale) ──
+   Секое .date-mask текст-поле е спарено со скриено поле (id="h_"+data-iso-target)
+   кое ја носи вистинската ISO вредност ("yyyy-mm-dd") што реално се праќа на серверот. */
+function syncDateHidden(input, hidden) {
+  var m = input.value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) {
+    hidden.value = m[3] + '-' + m[2] + '-' + m[1];
+  } else if (!input.value.trim()) {
+    hidden.value = '';
+  }
+}
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.date-mask').forEach(function (input) {
+    var hidden = document.getElementById('h_' + input.dataset.isoTarget);
+    if (!hidden) return;
+    if (hidden.value) {
+      var parts = hidden.value.split('-');
+      if (parts.length === 3) input.value = parts[2] + '/' + parts[1] + '/' + parts[0];
+    }
+    input.addEventListener('input', function () {
+      var digits = input.value.replace(/\D/g, '').slice(0, 8);
+      var out = digits;
+      if (digits.length > 4) out = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+      else if (digits.length > 2) out = digits.slice(0, 2) + '/' + digits.slice(2);
+      input.value = out;
+      syncDateHidden(input, hidden);
+    });
+    input.addEventListener('blur', function () { syncDateHidden(input, hidden); });
+  });
+});
+
+/* ── helpers ── */
+function fmt(n) { return parseFloat(n||0).toLocaleString('mk-MK',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function saldoStyle(v) {
+  if (v > 0.005) return 'color:#c0392b;font-weight:600';
+  if (v < -0.005) return 'color:#27ae60';
+  return '';
+}
+
+/* ── По полиса: expand → По фактури ── */
+var _polisaCache = {};
+function togglePolisa(cell, polisa) {
+  var icon = cell.querySelector('.exp-icon');
+  var tr   = cell.closest('tr');
+  var key  = 'pf_' + polisa;
+
+  // remove existing sub-rows if open
+  var existing = tr.nextSibling;
+  while (existing && existing.classList && existing.classList.contains('sub-faktura-row')) {
+    var nxt = existing.nextSibling;
+    existing.parentNode.removeChild(existing);
+    existing = nxt;
+  }
+  if (icon.textContent === '▼') { icon.textContent = '▶'; return; }
+
+  icon.textContent = '▼';
+
+  if (_polisaCache[key]) {
+    _insertFakturaRows(tr, _polisaCache[key], polisa);
+    return;
+  }
+
+  // loading placeholder
+  var loadTr = document.createElement('tr');
+  loadTr.className = 'sub-faktura-row sub-loading';
+  loadTr.innerHTML = '<td colspan="8">Се вчитува…</td>';
+  tr.parentNode.insertBefore(loadTr, tr.nextSibling);
+
+  fetch('/siglife-report/report-fakturi/expand-polisa?polisa_broj=' + encodeURIComponent(polisa))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      tr.parentNode.removeChild(loadTr);
+      if (data.error) { alert(data.error); icon.textContent='▶'; return; }
+      _polisaCache[key] = data.rows;
+      _insertFakturaRows(tr, data.rows, polisa);
+    })
+    .catch(function(){ tr.parentNode.removeChild(loadTr); icon.textContent='▶'; });
+}
+
+function _insertFakturaRows(afterTr, rows, polisa) {
+  var ref = afterTr.nextSibling;
+  rows.forEach(function(r) {
+    var sub = document.createElement('tr');
+    sub.className = 'sub-faktura-row';
+    sub.dataset.polisa  = polisa;
+    sub.dataset.faktura = r.faktura;
+    sub.innerHTML =
+      '<td style="text-align:center;cursor:pointer;" onclick="toggleFakturaInline(this,\''+escHtml(polisa)+'\',\''+escHtml(r.faktura)+'\')" title="Прикажи редови"><span class="exp-icon">▶</span></td>' +
+      '<td></td>' +
+      '<td>'+escHtml(r.faktura)+'</td>' +
+      '<td>'+escHtml(r.data_faktura)+'</td>' +
+      '<td>'+escHtml(r.tip_knizi)+'</td>' +
+      '<td style="text-align:right">'+fmt(r.vk_iznos)+'</td>' +
+      '<td style="text-align:right">'+fmt(r.vk_iznos_den)+'</td>' +
+      '<td style="text-align:right;'+saldoStyle(r.saldo)+'">'+fmt(r.saldo)+'</td>';
+    afterTr.parentNode.insertBefore(sub, ref);
+  });
+}
+
+/* ── По фактури (standalone table): expand → По ред ── */
+var _fakturaCache = {};
+function toggleFaktura(cell, polisa, faktura) {
+  _toggleRedRows(cell, polisa, faktura, 'sub-red-row', 12);
+}
+
+/* ── По полиса → фактура sub-row: expand → По ред ── */
+function toggleFakturaInline(cell, polisa, faktura) {
+  _toggleRedRows(cell, polisa, faktura, 'sub-red-row', 8);
+}
+
+function _toggleRedRows(cell, polisa, faktura, cls, colspan) {
+  var icon = cell.querySelector('.exp-icon');
+  var tr   = cell.closest('tr');
+  var key  = 'rf_' + polisa + '|' + faktura;
+
+  var existing = tr.nextSibling;
+  while (existing && existing.classList && existing.classList.contains(cls)) {
+    var nxt = existing.nextSibling;
+    existing.parentNode.removeChild(existing);
+    existing = nxt;
+  }
+  if (icon.textContent === '▼') { icon.textContent = '▶'; return; }
+  icon.textContent = '▼';
+
+  if (_fakturaCache[key]) {
+    _insertRedRows(tr, _fakturaCache[key], cls, colspan);
+    return;
+  }
+
+  var loadTr = document.createElement('tr');
+  loadTr.className = cls + ' sub-loading';
+  loadTr.innerHTML = '<td colspan="'+colspan+'">Се вчитува…</td>';
+  tr.parentNode.insertBefore(loadTr, tr.nextSibling);
+
+  fetch('/siglife-report/report-fakturi/expand-faktura?polisa_broj=' + encodeURIComponent(polisa) + '&faktura=' + encodeURIComponent(faktura))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      tr.parentNode.removeChild(loadTr);
+      if (data.error) { alert(data.error); icon.textContent='▶'; return; }
+      _fakturaCache[key] = data.rows;
+      _insertRedRows(tr, data.rows, cls, colspan);
+    })
+    .catch(function(){ tr.parentNode.removeChild(loadTr); icon.textContent='▶'; });
+}
+
+function _insertRedRows(afterTr, rows, cls, colspan) {
+  var ref = afterTr.nextSibling;
+  rows.forEach(function(r) {
+    var sub = document.createElement('tr');
+    sub.className = cls;
+    sub.innerHTML =
+      '<td style="text-align:center;color:#999;">'+escHtml(String(r.rata||''))+'</td>' +
+      '<td>'+escHtml(r.data_faktura)+'</td>' +
+      '<td>'+escHtml(r.data_valuta)+'</td>' +
+      '<td>'+escHtml(r.tip_knizi)+'</td>' +
+      '<td style="text-align:right;'+(r.iznos<0?'color:#c0392b':'')+'">'+fmt(r.iznos)+'</td>' +
+      '<td style="text-align:right">'+fmt(r.iznos_den)+'</td>' +
+      '<td style="text-align:right">'+fmt(r.naplata)+'</td>' +
+      '<td style="text-align:right;'+saldoStyle(r.saldo)+'">'+fmt(r.saldo)+'</td>';
+    afterTr.parentNode.insertBefore(sub, ref);
+  });
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── По фактури: checkbox helpers ── */
+function selAll(onlyNoPayment) {
+  document.querySelectorAll('.sel-cb').forEach(function(cb) {
+    if (onlyNoPayment) {
+      cb.checked = cb.dataset.noPayment === '1';
+    } else {
+      cb.checked = false;
+    }
+  });
+  updateCount();
+}
+function updateCount() {
+  var n = document.querySelectorAll('.sel-cb:checked').length;
+  var el = document.getElementById('selCount');
+  if (el) el.textContent = n > 0 ? ('Избрани: ' + n) : '';
+}
+function confirmSel() {
+  var n = document.querySelectorAll('.sel-cb:checked').length;
+  if (n === 0) { alert('Не е избрана ниедна фактура.'); return false; }
+  return confirm('Да се генерира Excel за затварање на ' + n + ' фактури?');
+}
+updateCount();
+
+function dospeanaToggle(cb) {
+  var hidden = document.getElementById('h_datum_faktura_do');
+  if (cb.checked && hidden && !hidden.value) {
+    var today = new Date();
+    var y = today.getFullYear();
+    var m = String(today.getMonth()+1).padStart(2,'0');
+    var d = String(today.getDate()).padStart(2,'0');
+    hidden.value = y + '-' + m + '-' + d;
+    var visible = document.querySelector('.date-mask[data-iso-target="datum_faktura_do"]');
+    if (visible) visible.value = d + '/' + m + '/' + y;
+  }
+}
+
+/* ── Popup за пребарување клиент ── */
+var _clientSearchTargetId = null;
+
+function openClientSearch(targetInputId) {
+  _clientSearchTargetId = targetInputId;
+  document.getElementById('clientSearchModal').style.display = 'flex';
+  document.getElementById('cs_edb').value = '';
+  document.getElementById('cs_opis').value = '';
+  document.getElementById('cs_client_id').value = '';
+  document.getElementById('cs_results').innerHTML = '';
+}
+
+function closeClientSearch() {
+  document.getElementById('clientSearchModal').style.display = 'none';
+}
+
+function clearClientSearchForm() {
+  document.getElementById('cs_edb').value = '';
+  document.getElementById('cs_opis').value = '';
+  document.getElementById('cs_client_id').value = '';
+  document.getElementById('cs_results').innerHTML = '';
+}
+
+function runClientSearch() {
+  var edb = encodeURIComponent(document.getElementById('cs_edb').value || '');
+  var opis = encodeURIComponent(document.getElementById('cs_opis').value || '');
+  var clientId = encodeURIComponent(document.getElementById('cs_client_id').value || '');
+  var resultsEl = document.getElementById('cs_results');
+  resultsEl.innerHTML = '<p style="padding:.5rem; color:#7f8c8d;">Пребарувам…</p>';
+
+  fetch('/siglife-report/report-fakturi/search-client?edb=' + edb + '&opis=' + opis + '&client_id=' + clientId)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) {
+        resultsEl.innerHTML = '<p style="padding:.5rem; color:#c0392b;">' + escHtml(data.error) + '</p>';
+        return;
+      }
+      if (!data.rows || !data.rows.length) {
+        resultsEl.innerHTML = '<p style="padding:.5rem; color:#7f8c8d;">Не постојат записи.</p>';
+        return;
+      }
+      var html = '<table style="width:100%; border-collapse:collapse;">' +
+        '<thead><tr style="background:#eef4fb;">' +
+        '<th style="text-align:left; padding:.4rem;">Клиент ID</th>' +
+        '<th style="text-align:left; padding:.4rem;">Опис</th>' +
+        '<th style="text-align:left; padding:.4rem;">ЕДБ/ЕМБГ</th>' +
+        '</tr></thead><tbody>';
+      data.rows.forEach(function (row, i) {
+        html += '<tr class="cs-row" data-idx="' + i + '" style="cursor:pointer; border-bottom:1px solid #eee;">' +
+          '<td style="padding:.4rem;">' + escHtml(row.client_id) + '</td>' +
+          '<td style="padding:.4rem;">' + escHtml(row.opis) + '</td>' +
+          '<td style="padding:.4rem;">' + escHtml(row.edb) + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      resultsEl.innerHTML = html;
+
+      resultsEl.querySelectorAll('.cs-row').forEach(function (tr) {
+        tr.addEventListener('mouseover', function () { tr.style.background = '#f5f8fb'; });
+        tr.addEventListener('mouseout', function () { tr.style.background = ''; });
+        tr.addEventListener('click', function () {
+          selectClientResult(data.rows[parseInt(tr.dataset.idx, 10)].opis);
+        });
+      });
+    })
+    .catch(function () {
+      resultsEl.innerHTML = '<p style="padding:.5rem; color:#c0392b;">Грешка при пребарување.</p>';
+    });
+}
+
+function selectClientResult(opis) {
+  if (_clientSearchTargetId) {
+    document.getElementById(_clientSearchTargetId).value = opis;
+  }
+  closeClientSearch();
+}
+</script>
+
+<div id="clientSearchModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,.4); z-index:2000; align-items:flex-start; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; margin-top:8vh; width:min(600px, 92vw); max-height:78vh;
+       display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <div style="padding:1rem 1.25rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <strong>Пребарување клиент</strong>
+      <button type="button" onclick="closeClientSearch()" class="btn btn-secondary" style="padding:.2rem .6rem;">✕</button>
+    </div>
+    <div style="padding:1rem 1.25rem; display:grid; grid-template-columns:1fr 1fr; gap:.6rem 1rem;">
+      <div class="form-group" style="margin:0">
+        <label>ЕДБ/ЕМБГ</label>
+        <input type="text" id="cs_edb">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Опис</label>
+        <input type="text" id="cs_opis">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Клиент ID</label>
+        <input type="text" id="cs_client_id">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:.5rem;">
+        <button type="button" class="btn btn-primary" onclick="runClientSearch()">Пребарај</button>
+        <button type="button" class="btn btn-secondary" onclick="clearClientSearchForm()">Ново пребарување</button>
+      </div>
+    </div>
+    <div id="cs_results" style="overflow-y:auto; border-top:1px solid #eee; flex:1;"></div>
+    <div style="padding:.75rem 1.25rem; border-top:1px solid #eee; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="closeClientSearch()">Затвори</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

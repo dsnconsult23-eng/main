@@ -20,7 +20,12 @@ def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
         # Чита ANTHROPIC_API_KEY од environment (или `ant auth login` профил).
-        _client = anthropic.Anthropic()
+        # Predadi go klucot eksplicitno. Bez api_key novite SDK verzii mozat
+        # da frlat nejasen TypeError za authentication method.
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY ne e postaven vo environment-ot.")
+        _client = anthropic.Anthropic(api_key=api_key)
     return _client
 
 
@@ -33,6 +38,11 @@ def generate_commentary(rows: list[dict], context: str, max_rows: int = 500) -> 
     """
     if not rows:
         return "Нема податоци за анализа."
+
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        # Без ова, anthropic SDK фрла TypeError длабоко во _build_headers со голем
+        # stack trace на секој повик — овде излегуваме веднаш, чисто.
+        raise RuntimeError("ANTHROPIC_API_KEY не е поставен во environment-от.")
 
     sample = rows[:max_rows]
 

@@ -1,0 +1,723 @@
+{% extends "base.html" %}
+
+{% block title %}Финансиски извештаи{% endblock %}
+
+{% block content %}
+<style>
+  .financial-page {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .financial-hero,
+  .financial-panel,
+  .statement-card {
+    background: #fff;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(44, 62, 80, 0.08);
+  }
+
+  .financial-hero,
+  .financial-panel {
+    padding: 1.25rem;
+  }
+
+  .financial-kicker {
+    margin: 0 0 .45rem;
+    color: #607080;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .financial-hero h1,
+  .financial-panel h2 {
+    margin: 0;
+    color: #203040;
+  }
+
+  .financial-hero h1 {
+    font-size: 1.6rem;
+    line-height: 1.25;
+  }
+
+  .financial-hero p {
+    max-width: 920px;
+    margin: .8rem 0 0;
+    color: #4f6070;
+    line-height: 1.65;
+  }
+
+  .financial-panel h2 {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e7edf3;
+    font-size: 1.25rem;
+  }
+
+  .filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: .85rem;
+    align-items: end;
+  }
+
+  .field label {
+    display: block;
+    margin-bottom: .35rem;
+    color: #607080;
+    font-size: .82rem;
+    font-weight: 700;
+  }
+
+  .field input,
+  .field select {
+    width: 100%;
+    min-height: 40px;
+    padding: .55rem .65rem;
+    border: 1px solid #c8d3dc;
+    border-radius: 6px;
+    background: #fff;
+    color: #243444;
+    outline: none;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, .14);
+  }
+
+  .btn-primary {
+    min-height: 40px;
+    padding: .55rem .95rem;
+    border: 1px solid #2c7db5;
+    border-radius: 6px;
+    background: #3498db;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .btn-primary:hover {
+    background: #287fb9;
+    border-color: #236f9f;
+  }
+
+  .statement-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  .statement-card {
+    padding: 1rem;
+    border-left: 4px solid #3498db;
+  }
+
+  .statement-card strong {
+    display: block;
+    margin-bottom: .45rem;
+    color: #203040;
+    font-size: 1.05rem;
+  }
+
+  .statement-card span {
+    display: block;
+    color: #5a6b7a;
+    line-height: 1.5;
+  }
+
+  .statement-table {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .statement-table table {
+    min-width: 760px;
+    border-collapse: collapse;
+  }
+
+  .statement-table th,
+  .statement-table td {
+    padding: .7rem .75rem;
+    border-bottom: 1px solid #e5ebf1;
+    text-align: left;
+    color: #405060;
+  }
+
+  .statement-table th {
+    background: #f8fafc;
+    color: #203040;
+    font-size: .82rem;
+    text-transform: uppercase;
+  }
+
+  .statement-table input,
+  .statement-table select {
+    width: 100%;
+    min-height: 34px;
+    padding: .4rem .5rem;
+    border: 1px solid #c8d3dc;
+    border-radius: 6px;
+    background: #fff;
+    color: #243444;
+  }
+
+  .amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status-note {
+    padding: .85rem;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #4f6070;
+    line-height: 1.5;
+  }
+
+  .definition-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    margin-top: .85rem;
+  }
+
+  .btn-secondary {
+    min-height: 40px;
+    padding: .55rem .95rem;
+    border: 1px solid #b8c7d4;
+    border-radius: 6px;
+    background: #fff;
+    color: #25394d;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .btn-secondary:hover {
+    background: #eef5fb;
+    border-color: #8eadc8;
+  }
+</style>
+
+<div class="financial-page">
+  <section class="financial-hero">
+    <p class="financial-kicker">Финансии</p>
+    <h1>Биланс на успех и Cash Flow</h1>
+    <p>
+      Работна страна за финансиски извештаи. Следниот чекор е поврзување со главна книга
+      или финансиски view од база, за вредностите да се полнат автоматски по период.
+    </p>
+  </section>
+
+  <section class="financial-panel">
+    <h2>Период</h2>
+    <div class="filter-row">
+      <div class="field">
+        <label for="reportType">Извештај</label>
+        <select id="reportType">
+          <option value="all">Биланс на успех и Cash Flow</option>
+          <option value="income">Биланс на успех</option>
+          <option value="cashflow">Cash Flow</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="year">Година</label>
+        <input type="number" id="year" min="2000" max="2100" value="{{ current_year }}">
+      </div>
+      <div class="field">
+        <label for="periodFrom">Од месец</label>
+        <select id="periodFrom">
+          <option value="1">Јануари</option>
+          <option value="2">Февруари</option>
+          <option value="3">Март</option>
+          <option value="4">Април</option>
+          <option value="5">Мај</option>
+          <option value="6">Јуни</option>
+          <option value="7">Јули</option>
+          <option value="8">Август</option>
+          <option value="9">Септември</option>
+          <option value="10">Октомври</option>
+          <option value="11">Ноември</option>
+          <option value="12">Декември</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="periodTo">До месец</label>
+        <select id="periodTo">
+          <option value="12">Декември</option>
+          <option value="1">Јануари</option>
+          <option value="2">Февруари</option>
+          <option value="3">Март</option>
+          <option value="4">Април</option>
+          <option value="5">Мај</option>
+          <option value="6">Јуни</option>
+          <option value="7">Јули</option>
+          <option value="8">Август</option>
+          <option value="9">Септември</option>
+          <option value="10">Октомври</option>
+          <option value="11">Ноември</option>
+        </select>
+      </div>
+      <button class="btn-primary" type="button" id="btnPreview">Прикажи</button>
+      <button class="btn-secondary" type="button" id="btnDbStatus">Провери база</button>
+    </div>
+  </section>
+
+  <section class="statement-grid">
+    <div class="statement-card">
+      <strong>Биланс на успех</strong>
+      <span>Приходи, расходи и финансиски резултат за избраниот период.</span>
+    </div>
+    <div class="statement-card">
+      <strong>Cash Flow</strong>
+      <span>Приливи, одливи и нето готовински тек по оперативни, инвестициски и финансиски активности.</span>
+    </div>
+    <div class="statement-card">
+      <strong>DB мапирање</strong>
+      <span>Потребни се конта, датум, дебит, кредит, опис и правила за групирање по извештај.</span>
+    </div>
+  </section>
+
+  <section class="financial-panel">
+    <h2>Кориснички дефиниции</h2>
+    <div class="filter-row">
+      <div class="field">
+        <label for="definitionReport">Извештај</label>
+        <select id="definitionReport">
+          <option value="Биланс на состојба">Биланс на состојба</option>
+          <option value="Биланс на успех">Биланс на успех</option>
+          <option value="Cash Flow">Cash Flow</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="definitionPosition">Позиција</label>
+        <input type="text" id="definitionPosition" placeholder="на пример: Приходи од премии">
+      </div>
+      <div class="field">
+        <label for="definitionAccounts">Конта / маска</label>
+        <input type="text" id="definitionAccounts" placeholder="на пример: 70*, 71*, 43%">
+      </div>
+      <div class="field">
+        <label for="definitionType">Тип</label>
+        <select id="definitionType">
+          <option value="Приход">Приход</option>
+          <option value="Расход">Расход</option>
+          <option value="Актива">Актива</option>
+          <option value="Пасива">Пасива</option>
+          <option value="Прилив">Прилив</option>
+          <option value="Одлив">Одлив</option>
+          <option value="Пресметка">Пресметка</option>
+        </select>
+      </div>
+    </div>
+    <div class="definition-actions">
+      <button class="btn-primary" type="button" id="btnAddDefinition">Додај дефиниција</button>
+      <button class="btn-secondary" type="button" id="btnLoadTemplate">Вчитај шаблон од правилник</button>
+      <button class="btn-secondary" type="button" id="btnClearDefinitions">Избриши ги сите</button>
+    </div>
+    <div class="statement-table" style="margin-top: 1rem;">
+      <table>
+        <thead>
+          <tr>
+            <th>Извештај</th>
+            <th>Позиција</th>
+            <th>Конта / маска</th>
+            <th>Тип</th>
+            <th class="amount">Дебит</th>
+            <th class="amount">Кредит</th>
+            <th class="amount">Износ</th>
+            <th>Акција</th>
+          </tr>
+        </thead>
+        <tbody id="definitionsBody">
+          <tr>
+            <td colspan="8">Нема внесени кориснички дефиниции.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="status-note" id="previewStatus" style="margin-top: 1rem;">
+      Додај дефиниции и кликни „Прикажи“ за пресметка од stavka.
+    </div>
+  </section>
+
+  <section class="financial-panel">
+    <h2>Биланс на успех</h2>
+    <div class="statement-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Позиција</th>
+            <th>Група конта</th>
+            <th>Опис</th>
+            <th class="amount">Износ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Оперативни приходи</td>
+            <td>класа приходи</td>
+            <td>Премии, провизии и останати приходи од работење</td>
+            <td class="amount">-</td>
+          </tr>
+          <tr>
+            <td>Оперативни расходи</td>
+            <td>класа расходи</td>
+            <td>Штети, трошоци, резерви и останати расходи</td>
+            <td class="amount">-</td>
+          </tr>
+          <tr>
+            <td>Финансиски резултат</td>
+            <td>пресметка</td>
+            <td>Добивка или загуба пред оданочување</td>
+            <td class="amount">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="financial-panel">
+    <h2>Cash Flow</h2>
+    <div class="statement-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Позиција</th>
+            <th>Група</th>
+            <th>Опис</th>
+            <th class="amount">Прилив</th>
+            <th class="amount">Одлив</th>
+            <th class="amount">Нето</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Оперативни активности</td>
+            <td>оперативно</td>
+            <td>Наплата и плаќања од основна дејност</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+          </tr>
+          <tr>
+            <td>Инвестициски активности</td>
+            <td>инвестиции</td>
+            <td>Купување/продажба на вложувања и средства</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+          </tr>
+          <tr>
+            <td>Финансиски активности</td>
+            <td>финансирање</td>
+            <td>Кредити, капитал и останати финансиски текови</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+            <td class="amount">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="financial-panel">
+    <h2>Што треба за поврзување со база</h2>
+    <div class="status-note">
+      За автоматска пресметка треба SQL извор со најмалку: датум на налог, конто, опис,
+      дебит, кредит, износ и валута. Потоа се додава мапа која кажува кои конта влегуваат
+      во Биланс на успех, а кои во Cash Flow.
+    </div>
+  </section>
+</div>
+
+<script>
+let userDefinitions = [];
+
+function formatAmount(value) {
+  const numberValue = Number(value || 0);
+  return numberValue.toLocaleString("mk-MK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function setPreviewStatus(message) {
+  document.getElementById("previewStatus").innerText = message;
+}
+
+async function loadDefinitions() {
+  try {
+    const response = await fetch("/siglife-report/FinansiskiIzvestai/definitions", {
+      credentials: "same-origin"
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Не може да се вчитаат дефинициите.");
+    }
+    userDefinitions = data.definitions || [];
+    renderDefinitions();
+    setPreviewStatus(`Вчитани се ${userDefinitions.length} дефиниции од JSON фајл.`);
+  } catch (error) {
+    userDefinitions = [];
+    renderDefinitions();
+    setPreviewStatus("Грешка при читање дефиниции: " + error.message);
+  }
+}
+
+async function saveDefinitions(showStatus = true) {
+  try {
+    const response = await fetch("/siglife-report/FinansiskiIzvestai/definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ definitions: userDefinitions })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Не може да се зачуваат дефинициите.");
+    }
+    if (showStatus) {
+      setPreviewStatus(`Зачувани се ${data.saved_count} дефиниции во JSON фајл.`);
+    }
+  } catch (error) {
+    setPreviewStatus("Грешка при зачувување дефиниции: " + error.message);
+  }
+}
+
+function renderDefinitions() {
+  const body = document.getElementById("definitionsBody");
+  body.innerHTML = "";
+
+  if (!userDefinitions.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="8">Нема внесени кориснички дефиниции.</td>';
+    body.appendChild(row);
+    return;
+  }
+
+  userDefinitions.forEach((item, index) => {
+    const row = document.createElement("tr");
+    const reportCell = document.createElement("td");
+    reportCell.innerText = item.code ? `${item.report} (${item.code})` : item.report;
+    row.appendChild(reportCell);
+
+    const positionCell = document.createElement("td");
+    positionCell.innerText = item.position;
+    row.appendChild(positionCell);
+
+    const accountsCell = document.createElement("td");
+    const accountsInput = document.createElement("input");
+    accountsInput.type = "text";
+    accountsInput.value = item.accounts || "";
+    accountsInput.placeholder = "на пример: 70*, 43%";
+    accountsInput.addEventListener("change", () => {
+      userDefinitions[index].accounts = accountsInput.value.trim();
+      saveDefinitions(false);
+    });
+    accountsCell.appendChild(accountsInput);
+    row.appendChild(accountsCell);
+
+    const typeCell = document.createElement("td");
+    const typeSelect = document.createElement("select");
+    ["Приход", "Расход", "Актива", "Пасива", "Прилив", "Одлив", "Пресметка"].forEach(type => {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = type;
+      option.selected = item.type === type;
+      typeSelect.appendChild(option);
+    });
+    typeSelect.addEventListener("change", () => {
+      userDefinitions[index].type = typeSelect.value;
+      saveDefinitions(false);
+    });
+    typeCell.appendChild(typeSelect);
+    row.appendChild(typeCell);
+
+    [item.debit, item.credit, item.amount].forEach(value => {
+      const cell = document.createElement("td");
+      cell.className = "amount";
+      cell.innerText = value == null ? "-" : formatAmount(value);
+      row.appendChild(cell);
+    });
+
+    const actionCell = document.createElement("td");
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "btn-secondary";
+    deleteButton.type = "button";
+    deleteButton.dataset.index = index;
+    deleteButton.innerText = "Избриши";
+    actionCell.appendChild(deleteButton);
+    row.appendChild(actionCell);
+    body.appendChild(row);
+  });
+
+  body.querySelectorAll("button[data-index]").forEach(button => {
+    button.addEventListener("click", () => {
+      userDefinitions.splice(Number(button.dataset.index), 1);
+      saveDefinitions();
+      renderDefinitions();
+    });
+  });
+}
+
+document.getElementById("btnAddDefinition").addEventListener("click", () => {
+  const report = document.getElementById("definitionReport").value;
+  const position = document.getElementById("definitionPosition").value.trim();
+  const accounts = document.getElementById("definitionAccounts").value.trim();
+  const type = document.getElementById("definitionType").value;
+
+  if (!position || !accounts) {
+    alert("Внеси позиција и конта/маска.");
+    return;
+  }
+
+  userDefinitions.push({ report, position, accounts, type });
+  saveDefinitions();
+  renderDefinitions();
+
+  document.getElementById("definitionPosition").value = "";
+  document.getElementById("definitionAccounts").value = "";
+});
+
+document.getElementById("btnClearDefinitions").addEventListener("click", () => {
+  if (!userDefinitions.length) return;
+  if (!confirm("Да се избришат сите кориснички дефиниции?")) return;
+  userDefinitions = [];
+  saveDefinitions();
+  renderDefinitions();
+});
+
+document.getElementById("btnLoadTemplate").addEventListener("click", () => {
+  if (userDefinitions.length && !confirm("Да се додадат позициите од правилникот на постоечките дефиниции?")) {
+    return;
+  }
+
+  setPreviewStatus("Се вчитува шаблон од правилник...");
+  fetch("/siglife-report/FinansiskiIzvestai/templates", {
+    credentials: "same-origin"
+  })
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Не може да се вчита шаблонот.");
+      }
+      return data;
+    })
+    .then(data => {
+      const existingKeys = new Set(userDefinitions.map(item => `${item.report}|${item.code || item.position}`));
+      const templateItems = data.templates.map(item => ({
+          report: item.statement,
+          code: item.code,
+          position: item.position,
+          accounts: item.accounts || "",
+          type: item.type,
+          debit: null,
+          credit: null,
+          amount: null
+        }));
+      const templateMap = new Map(
+        templateItems.map(item => [`${item.report}|${item.code || item.position}`, item])
+      );
+      let updatedCount = 0;
+
+      userDefinitions = userDefinitions.map(item => {
+        const key = `${item.report}|${item.code || item.position}`;
+        const templateItem = templateMap.get(key);
+        if (!templateItem) return item;
+        updatedCount += 1;
+        return {
+          ...item,
+          position: templateItem.position,
+          accounts: item.accounts || templateItem.accounts,
+          type: item.type || templateItem.type
+        };
+      });
+
+      const newItems = templateItems.filter(item => !existingKeys.has(`${item.report}|${item.code || item.position}`));
+
+      userDefinitions = userDefinitions.concat(newItems);
+      saveDefinitions(false);
+      renderDefinitions();
+      setPreviewStatus(`Додадени се ${newItems.length}, ажурирани се ${updatedCount} позиции од правилникот.`);
+    })
+    .catch(error => {
+      setPreviewStatus("Грешка: " + error.message);
+    });
+});
+
+document.getElementById("btnDbStatus").addEventListener("click", () => {
+  setPreviewStatus("Се проверува DB конекција...");
+  fetch("/siglife-report/FinansiskiIzvestai/db-status", {
+    credentials: "same-origin"
+  })
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "DB конекцијата не е успешна.");
+      }
+      return data;
+    })
+    .then(data => {
+      setPreviewStatus(data.message);
+    })
+    .catch(error => {
+      setPreviewStatus("DB грешка: " + error.message);
+    });
+});
+
+document.getElementById("btnPreview").addEventListener("click", () => {
+  if (!userDefinitions.length) {
+    alert("Прво додај барем една корисничка дефиниција.");
+    return;
+  }
+
+  const payload = {
+    year: Number(document.getElementById("year").value),
+    month_from: Number(document.getElementById("periodFrom").value),
+    month_to: Number(document.getElementById("periodTo").value),
+    definitions: userDefinitions
+  };
+
+  setPreviewStatus("Се пресметува од stavka...");
+
+  fetch("/siglife-report/FinansiskiIzvestai/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(payload)
+  })
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Грешка при пресметка.");
+      }
+      return data;
+    })
+    .then(data => {
+      const resultMap = new Map(
+        data.rows.map(item => [`${item.report}|${item.code || item.position}`, item])
+      );
+      userDefinitions = userDefinitions.map(item => {
+        const result = resultMap.get(`${item.report}|${item.code || item.position}`);
+        return result ? { ...item, ...result } : item;
+      });
+      saveDefinitions(false);
+      renderDefinitions();
+      setPreviewStatus(
+        "Пресметката е завршена. Вкупно: " + formatAmount(data.summary.amount)
+      );
+    })
+    .catch(error => {
+      setPreviewStatus("Грешка: " + error.message);
+    });
+});
+
+loadDefinitions();
+</script>
+{% endblock %}

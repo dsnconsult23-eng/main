@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from routers import aso_reports
 import os
 from datetime import datetime
@@ -49,7 +49,13 @@ async def aso_page(request: Request):
 async def import_si(request: Request, month: str = Form(...), year: str = Form(...)):
     user = get_current_user(request)
 
-    ok, result = aso_reports.prebSI(month, year)
+    ok, result = aso_reports.ImportSI(month, year)
+    if ok and result and os.path.exists(result):
+        return FileResponse(
+            path=result,
+            filename=os.path.basename(result),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     message = f"Грешка: {result}" if not ok else f"Успешно! Резултат: {result}"
 
     return templates.TemplateResponse(
@@ -69,7 +75,38 @@ async def gen_excel(request: Request, month: str = Form(...), year: str = Form(.
     user = get_current_user(request)
 
     ok, result = aso_reports.genSI(month, year)
+    if ok and result and os.path.exists(result):
+        return FileResponse(
+            path=result,
+            filename=os.path.basename(result),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     message = f"Грешка: {result}" if not ok else "Excel генериран успешно!"
+
+    return templates.TemplateResponse(
+        "aso_reports.html",
+        {
+            "request": request,
+            "result": message,
+            "selected_month": month,
+            "selected_year": int(year),
+            "user": user
+        }
+    )
+
+
+@router.post("/aso/gen-stat-pregledi", response_class=HTMLResponse)
+async def gen_stat_pregledi(request: Request, month: str = Form(...), year: str = Form(...)):
+    user = get_current_user(request)
+
+    ok, result = aso_reports.gen_stat_pregledi(month, year)
+    if ok and result and os.path.exists(result):
+        return FileResponse(
+            path=result,
+            filename=os.path.basename(result),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    message = f"Грешка: {result}" if not ok else "Excel stat pregledi генериран успешно!"
 
     return templates.TemplateResponse(
         "aso_reports.html",
@@ -88,6 +125,12 @@ async def sp1_analitika(request: Request, month: str = Form(...), year: str = Fo
     user = get_current_user(request)
 
     ok, result = aso_reports.Sp1analitika_a(month, year)
+    if ok and result and os.path.exists(result):
+        return FileResponse(
+            path=result,
+            filename=os.path.basename(result),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     message = f"Грешка: {result}" if not ok else "СП-1 Аналитика генерирана успешно!"
 
     return templates.TemplateResponse(
@@ -107,6 +150,12 @@ async def sp2_analitika(request: Request, month: str = Form(...), year: str = Fo
     user = get_current_user(request)
 
     ok, result = aso_reports.Sp2analitika_a(month, year)
+    if ok and result and os.path.exists(result):
+        return FileResponse(
+            path=result,
+            filename=os.path.basename(result),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     message = f"Грешка: {result}" if not ok else "СП-2 Аналитика генерирана успешно!"
 
     return templates.TemplateResponse(

@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .mesh-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 0 15px;
+    }
+
+    .mesh-title {
+        margin-bottom: 20px;
+    }
+
+    .mesh-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .mesh-card {
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        padding: 18px;
+    }
+
+    .mesh-card h3 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-size: 18px;
+    }
+
+    .mesh-card label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .mesh-card input,
+    .mesh-card textarea,
+    .mesh-card button {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 12px;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #d6d6d6;
+        font-size: 14px;
+    }
+
+    .mesh-card button {
+        background: #1d4f91;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+    }
+
+    .mesh-card button:hover {
+        background: #163d70;
+    }
+
+    .mesh-result {
+        background: #111827;
+        color: #f9fafb;
+        padding: 12px;
+        border-radius: 8px;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        min-height: 120px;
+        font-size: 13px;
+    }
+
+    .mesh-full {
+        margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+        .mesh-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="mesh-container">
+    <h1 class="mesh-title">Mesh / ComplyAdvantage</h1>
+
+    <div class="mesh-grid">
+        <div class="mesh-card">
+            <h3>Client info</h3>
+            <button onclick="loadClient()">Load client info</button>
+            <div id="clientResult" class="mesh-result"></div>
+        </div>
+
+        <div class="mesh-card">
+            <h3>Cases</h3>
+            <button onclick="loadCases()">Load cases</button>
+            <div id="casesResult" class="mesh-result"></div>
+        </div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Customers</h3>
+        <label for="customerSearch">Search customer</label>
+        <input type="text" id="customerSearch" placeholder="Enter search text">
+        <button onclick="loadCustomers()">Search customers</button>
+        <div id="customersResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Customer details / scores / monitor</h3>
+        <label for="customerId">Customer ID</label>
+        <input type="text" id="customerId" placeholder="Enter customer ID">
+
+        <button onclick="loadCustomerDetails()">Load customer details</button>
+        <button onclick="loadCustomerScores()">Load customer scores</button>
+        <button onclick="loadCustomerMonitor()">Load customer monitor</button>
+
+        <div id="customerDetailsResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Create and Screen - Sync</h3>
+        <label for="syncPayload">JSON payload</label>
+        <textarea id="syncPayload" rows="14">{
+  "customer": {
+    "customer_type": "INDIVIDUAL",
+    "first_name": "Test",
+    "last_name": "User"
+  }
+}</textarea>
+        <button onclick="createAndScreenSync()">Run sync screening</button>
+        <div id="syncResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Create and Screen - Async</h3>
+        <label for="asyncPayload">JSON payload</label>
+        <textarea id="asyncPayload" rows="14">{
+  "customer": {
+    "customer_type": "INDIVIDUAL",
+    "first_name": "Async",
+    "last_name": "User"
+  }
+}</textarea>
+        <button onclick="createAndScreenAsync()">Run async screening</button>
+        <div id="asyncResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Workflow status</h3>
+        <label for="workflowId">Workflow ID</label>
+        <input type="text" id="workflowId" placeholder="Enter workflow ID">
+        <button onclick="loadWorkflowStatus()">Check workflow status</button>
+        <div id="workflowResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Create webhook</h3>
+        <label for="webhookPayload">Webhook JSON payload</label>
+        <textarea id="webhookPayload" rows="10">{
+  "target_url": "https://your-domain.com/webhooks/mesh",
+  "events": ["workflow.completed"]
+}</textarea>
+        <button onclick="createWebhook()">Create webhook</button>
+        <div id="webhookResult" class="mesh-result"></div>
+    </div>
+
+    <div class="mesh-card mesh-full">
+        <h3>Test webhook</h3>
+        <label for="webhookTestPayload">Webhook test JSON payload</label>
+        <textarea id="webhookTestPayload" rows="8">{
+  "target_url": "https://your-domain.com/webhooks/mesh"
+}</textarea>
+        <button onclick="testWebhook()">Test webhook</button>
+        <div id="webhookTestResult" class="mesh-result"></div>
+    </div>
+</div>
+
+<script>
+    function prettyPrint(targetId, data) {
+        document.getElementById(targetId).textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function handleResponse(response) {
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || "Request failed");
+        }
+        return data;
+    }
+
+    async function loadClient() {
+        try {
+            const response = await fetch("/siglife-report/mesh/client");
+            const data = await handleResponse(response);
+            prettyPrint("clientResult", data);
+        } catch (err) {
+            prettyPrint("clientResult", { error: err.message });
+        }
+    }
+
+    async function loadCases() {
+        try {
+            const response = await fetch("/siglife-report/mesh/cases");
+            const data = await handleResponse(response);
+            prettyPrint("casesResult", data);
+        } catch (err) {
+            prettyPrint("casesResult", { error: err.message });
+        }
+    }
+
+    async function loadCustomers() {
+        try {
+            const search = document.getElementById("customerSearch").value.trim();
+            const url = search
+                ? `/siglife-report/mesh/customers?search=${encodeURIComponent(search)}`
+                : "/siglife-report/mesh/customers";
+
+            const response = await fetch(url);
+            const data = await handleResponse(response);
+            prettyPrint("customersResult", data);
+        } catch (err) {
+            prettyPrint("customersResult", { error: err.message });
+        }
+    }
+
+    async function loadCustomerDetails() {
+        try {
+            const customerId = document.getElementById("customerId").value.trim();
+            const response = await fetch(`/siglife-report/mesh/customers/${encodeURIComponent(customerId)}`);
+            const data = await handleResponse(response);
+            prettyPrint("customerDetailsResult", data);
+        } catch (err) {
+            prettyPrint("customerDetailsResult", { error: err.message });
+        }
+    }
+
+    async function loadCustomerScores() {
+        try {
+            const customerId = document.getElementById("customerId").value.trim();
+            const response = await fetch(`/siglife-report/mesh/customers/${encodeURIComponent(customerId)}/scores`);
+            const data = await handleResponse(response);
+            prettyPrint("customerDetailsResult", data);
+        } catch (err) {
+            prettyPrint("customerDetailsResult", { error: err.message });
+        }
+    }
+
+    async function loadCustomerMonitor() {
+        try {
+            const customerId = document.getElementById("customerId").value.trim();
+            const response = await fetch(`/siglife-report/mesh/customers/${encodeURIComponent(customerId)}/monitor`);
+            const data = await handleResponse(response);
+            prettyPrint("customerDetailsResult", data);
+        } catch (err) {
+            prettyPrint("customerDetailsResult", { error: err.message });
+        }
+    }
+
+    async function createAndScreenSync() {
+        try {
+            const payload = JSON.parse(document.getElementById("syncPayload").value);
+            const response = await fetch("/siglife-report/mesh/create-and-screen-sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await handleResponse(response);
+            prettyPrint("syncResult", data);
+        } catch (err) {
+            prettyPrint("syncResult", { error: err.message });
+        }
+    }
+
+    async function createAndScreenAsync() {
+        try {
+            const payload = JSON.parse(document.getElementById("asyncPayload").value);
+            const response = await fetch("/siglife-report/mesh/create-and-screen-async", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await handleResponse(response);
+            prettyPrint("asyncResult", data);
+        } catch (err) {
+            prettyPrint("asyncResult", { error: err.message });
+        }
+    }
+
+    async function loadWorkflowStatus() {
+        try {
+            const workflowId = document.getElementById("workflowId").value.trim();
+            const response = await fetch(`/siglife-report/mesh/workflow/${encodeURIComponent(workflowId)}`);
+            const data = await handleResponse(response);
+            prettyPrint("workflowResult", data);
+        } catch (err) {
+            prettyPrint("workflowResult", { error: err.message });
+        }
+    }
+
+    async function createWebhook() {
+        try {
+            const payload = JSON.parse(document.getElementById("webhookPayload").value);
+            const response = await fetch("/siglife-report/mesh/webhook/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await handleResponse(response);
+            prettyPrint("webhookResult", data);
+        } catch (err) {
+            prettyPrint("webhookResult", { error: err.message });
+        }
+    }
+
+    async function testWebhook() {
+        try {
+            const payload = JSON.parse(document.getElementById("webhookTestPayload").value);
+            const response = await fetch("/siglife-report/mesh/webhook/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await handleResponse(response);
+            prettyPrint("webhookTestResult", data);
+        } catch (err) {
+            prettyPrint("webhookTestResult", { error: err.message });
+        }
+    }
+</script>
+{% endblock %}

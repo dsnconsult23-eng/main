@@ -1,0 +1,738 @@
+CREATE FUNCTION appus  ( p_FIN_IZVOD_FILEID int, p_tuser_id int)
+returning integer,char(100);
+
+
+
+define v_fin_izvod_file_red lvarchar(20000);
+define v_Smetka_deponent varchar(18);
+ define v_Plakac_naziv varchar(100);
+ define v_plakac_smetka varchar(20)  ;
+define v_iznos_dolzi varchar(19);
+define v_iznos_pobaruva varchar(19);
+ define v_iznos_prov varchar(19);
+define v_datum_plati,v_broj_izvod varchar(10);
+ define v_cel_doznaka varchar(70);
+ define v_sifra_plakanje,tvaluta varchar(3);
+define v_povikuvanje_broj_zad varchar(24);
+define  v_povikuvanje_broj_odob varchar(24);
+define  v_nacin_plakanje varchar(1) ; 
+define v_dolzi , v_pobaruva ,v_provizija decimal(20,2);
+define  v_datum,v_datum_izvod date;
+ define v_FIN_IZVOD_FILE_stID int  ;
+define v_dali , v_par_vid_izvodid  ,v_FIN_IZVOD_HID int ;
+define v_polisa_broj1 ,v_polisa_broj2 , v_polisa_broj3 varchar(10);
+define  v_iznos1 ,v_iznos2 , v_iznos3  decimal(20,2);
+define v_rata ,v_par_clientid ,v_rbr , v_par_tip_dokumentid,esql, eisam int ; 
+define  v_faktura varchar(20);
+
+define  v_ponuda_broj varchar(10) ; 
+define v_vk_iznos,v_vk_iznos_evra, v_vk_iznos_rasp,v_pp,v_ppp1,v_iznos ,v_iznos_den ,v_iznos_plati_den,v_iznos_plati decimal(20,2);
+ define v_par_tip_dokumentid_n,v_par_valutaid_ponuda, v_dali_postoi, v_par_valutaid , v_tos_ponudaid ,tos_produktid,ttr_desc,i int;
+ define tdata_faktura date;
+ define v_os_aneksid int8;
+ define sql varchar(100);
+ define tplakac_naziv,tpovikuvanje_broj_odob varchar(255);
+ define tkolku_stavki int;
+
+
+
+--on exception
+	--ROLLBACK WORK;
+ --       return -1,'NASTANATA E GRE[KA';
+--end exception;
+
+set isolation to dirty read;
+
+--set debug file to "err_FIN_IZVOD_FILE_INSERT.sql";
+--trace on;
+select count(1) into tkolku_stavki from  FIN_IZVOD_FILE_st 
+ where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID;
+
+
+
+if p_tuser_id <>6  and tkolku_stavki >50 then 
+update FIN_IZVOD_FILE set version = version+1,DATECHANGED=current, f_avtomatski=1
+ where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID;
+  
+return '1','ИЗВОДОТ ЌЕ СЕ РАСКНИЖИ АВТОМАТСКИ';
+end if; 
+--BEGIN WORK;
+execute  FUNCTION appuser.update_aneks_rata() into i;
+
+select COUNT(*) into v_dali from FIN_IZVOD_FILE_ST
+where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID
+and FIN_IZVOD_FILE_ST.polisa_broj1 is null;
+
+
+select sum(pobaruva),  nvl(sum(iznos1),0)+nvl(sum(iznos2),0)+nvl(sum(iznos3),0) into v_pp, v_ppp1 from fin_izvod_file_st
+where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID;
+
+--if v_pp<v_ppp1 then
+	--return -1, 	'Износот по ставки е поголем од     побарува . Проверете   ' ;
+
+
+--end if;
+
+
+select par_vid_izvodid, datum_izvod, broj_izvod into v_par_vid_izvodid, v_datum_izvod, v_broj_izvod from FIN_IZVOD_FILE
+where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID;
+
+
+select count(*) into v_dali_postoi from fin_izvod_h 
+where broj_izvod=v_broj_izvod
+and par_vid_izvodid=v_par_vid_izvodid
+and datum=v_datum_izvod;
+
+
+
+if  v_dali_postoi>0  then
+select FIN_IZVOD_HID into v_FIN_IZVOD_HID from fin_izvod_h 
+where broj_izvod=v_broj_izvod
+ and par_vid_izvodid=v_par_vid_izvodid
+ and datum=v_datum_izvod;
+else 
+
+let v_FIN_IZVOD_HID= sq_fin_izvod_h.nextval;
+    INSERT INTO   FIN_IZVOD_H (  FIN_IZVOD_HID,  datecreated,   usercreated,  version,  par_vid_izvodid,  broj_izvod,  datum,      par_statusid) 
+VALUES (v_FIN_IZVOD_HID, current, p_tuser_id,0,v_par_vid_izvodid,v_broj_izvod,v_datum_izvod,1);
+
+
+end if;
+  
+
+
+foreach WITH HOLD
+
+select FIN_IZVOD_FILE_stID,fin_izvod_file_red, trim(polisa_broj1),trim(polisa_broj2), trim(polisa_broj3), iznos1,iznos2, iznos3,plakac_naziv,povikuvanje_broj_odob
+ into v_FIN_IZVOD_FILE_stID,v_fin_izvod_file_red,  v_polisa_broj1,v_polisa_broj2, v_polisa_broj3, v_iznos1,v_iznos2, v_iznos3,tplakac_naziv,tpovikuvanje_broj_odob
+ from FIN_IZVOD_FILE_st
+where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID
+and par_statusid<>10
+--and fin_izvod_file_stid=1681357
+order by FIN_IZVOD_FILE_stID
+
+		on exception set esql, eisam, sql
+    	continue foreach;
+end exception with resume;
+--BEGIN WORK;
+if v_fin_izvod_file_red like '12%' then 
+   	continue foreach;
+   	end if; 
+if nvl(v_polisa_broj1,'')<>''  or  nvl(v_polisa_broj2,'')<>'' or nvl(v_polisa_broj3,'')<>''then 
+if nvl(v_polisa_broj1,'')<>'' then 
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj1 
+ and saldo>0.9;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj1
+  and saldo>0;
+ 
+ 
+ select first 1  os_ponudaid into v_tos_ponudaid
+ from vw_pregled2_test
+ where polisa_broj=v_polisa_broj1;
+ 
+
+ 
+ 
+--set debug file to "err_FIN_IZVOD_FILE_INSERT.sql";
+--trace on;
+ 
+ select nvl(par_valutaid,0), os_produktid into v_par_valutaid ,tos_produktid
+ from os_ponuda 
+ where os_ponudaid=v_tos_ponudaid;
+ 
+ if v_par_valutaid=0 then 
+  select nvl(par_valutaid,0) into v_par_valutaid 
+ from os_produkt
+ where os_produktid=tos_produktid;
+ end if;
+ 
+select valuta into tvaluta from par_valuta 
+where par_valutaid=v_par_valutaid; 
+ 
+ 
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+--let v_iznos_den=dbo.konverzija(v_datum_izvod,v_iznos,v_par_valutaid,'MKD');
+
+let v_iznos_plati=v_iznos1;
+
+ execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+
+
+select par_tip_dokumentid into v_par_tip_dokumentid from par_tip_dokument where par_tip_dokument='PREM'; 
+ 
+if v_iznos_plati <>0  and nvl(v_os_aneksid,0)<>0 then
+
+if v_iznos<v_iznos_plati then 
+ execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+-- print 'ada';
+INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj1 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj1
+  and saldo>0;
+ 
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj1 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj1
+  and saldo>0;
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+
+ else
+  -- Толеранција 0.5%: ако уплатата е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+ end if ; 
+    
+    
+    
+    
+    
+    
+    
+  else
+
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+ 	select par_tip_dokumentid into v_par_tip_dokumentid_n from par_tip_dokument where par_tip_dokument='EVID'; 	
+	
+--execute procedure snimi_prevod(v_polisa_broj1,'admin') into  ttr_desc;
+     INSERT INTO   fin_izvod_i
+( fin_izvod_iid, datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,      iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,  desc) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid_n,v_iznos1,v_iznos1,1,363,
+v_polisa_broj1) ;
+ end if;
+ end if;
+ 
+ --polisa 2 
+ if nvl(v_polisa_broj2,'')<>'' then 
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj2
+ and saldo>0.9;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj2
+  and saldo>0;
+ 
+ 
+ select first 1  os_ponudaid into v_tos_ponudaid
+ from vw_pregled2_test
+ where polisa_broj=v_polisa_broj2;
+ 
+
+ 
+ 
+--set debug file to "err_FIN_IZVOD_FILE_INSERT.sql";
+--trace on;
+ 
+ select nvl(par_valutaid,0), os_produktid into v_par_valutaid ,tos_produktid
+ from os_ponuda 
+ where os_ponudaid=v_tos_ponudaid;
+ 
+ if v_par_valutaid=0 then 
+  select nvl(par_valutaid,0) into v_par_valutaid 
+ from os_produkt
+ where os_produktid=tos_produktid;
+ end if;
+ 
+select valuta into tvaluta from par_valuta 
+where par_valutaid=v_par_valutaid; 
+ 
+ 
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+--let v_iznos_den=dbo.konverzija(v_datum_izvod,v_iznos,v_par_valutaid,'MKD');
+
+let v_iznos_plati=v_iznos2;
+
+ execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+
+
+select par_tip_dokumentid into v_par_tip_dokumentid from par_tip_dokument where par_tip_dokument='PREM'; 
+ 
+if v_iznos_plati <>0  and nvl(v_os_aneksid,0)<>0 then
+
+if v_iznos<v_iznos_plati then 
+ execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+-- print 'ada';
+INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj2 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj2
+  and saldo>0;
+ 
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj2 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj2
+  and saldo>0;
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+
+ else
+  -- Толеранција 0.5%: ако уплатата е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+ end if ; 
+    
+    
+    
+    
+    
+    
+    
+  else
+
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+ 	select par_tip_dokumentid into v_par_tip_dokumentid_n from par_tip_dokument where par_tip_dokument='EVID'; 	
+	
+--execute procedure snimi_prevod(v_polisa_broj1,'admin') into  ttr_desc;
+     INSERT INTO   fin_izvod_i
+( fin_izvod_iid, datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,      iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,  desc) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid_n,v_iznos2,v_iznos2,1,363,
+v_polisa_broj2) ;
+ end if;
+ end if;
+--polisa 2 end 
+
+---polisa 3
+ if nvl(v_polisa_broj3,'')<>'' then 
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj3
+ and saldo>0.9;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj3
+  and saldo>0;
+ 
+ 
+ select first 1  os_ponudaid into v_tos_ponudaid
+ from vw_pregled2_test
+ where polisa_broj=v_polisa_broj3;
+ 
+
+ 
+ 
+--set debug file to "err_FIN_IZVOD_FILE_INSERT.sql";
+--trace on;
+ 
+ select nvl(par_valutaid,0), os_produktid into v_par_valutaid ,tos_produktid
+ from os_ponuda 
+ where os_ponudaid=v_tos_ponudaid;
+ 
+ if v_par_valutaid=0 then 
+  select nvl(par_valutaid,0) into v_par_valutaid 
+ from os_produkt
+ where os_produktid=tos_produktid;
+ end if;
+ 
+select valuta into tvaluta from par_valuta 
+where par_valutaid=v_par_valutaid; 
+ 
+ 
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+--let v_iznos_den=dbo.konverzija(v_datum_izvod,v_iznos,v_par_valutaid,'MKD');
+
+let v_iznos_plati=v_iznos3;
+
+ execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+
+
+select par_tip_dokumentid into v_par_tip_dokumentid from par_tip_dokument where par_tip_dokument='PREM'; 
+ 
+if v_iznos_plati <>0  and nvl(v_os_aneksid,0)<>0 then
+
+if v_iznos<v_iznos_plati then 
+ execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+-- print 'ada';
+INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj3 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj3
+  and saldo>0;
+ 
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+let v_iznos_plati=v_iznos_plati-v_iznos;
+
+ select  min(data_faktura) into tdata_faktura from izvod_aneks
+ where polisa_broj=v_polisa_broj3 
+ and saldo>0;
+
+
+select saldo,  par_clientid, os_aneksid into v_iznos,  v_par_clientid, v_os_aneksid   from izvod_aneks 
+ where data_faktura=tdata_faktura
+ and polisa_broj=v_polisa_broj3
+  and saldo>0;
+ 
+if v_iznos<v_iznos_plati then   
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+else
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1; end if;
+  -- Толеранција 0.5%: ако остатокот е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+end if;
+ 
+
+
+ else
+  -- Толеранција 0.5%: ако уплатата е во рамките на 0.5% од ратата, затвори ја во целост
+  if v_iznos > 0 and (v_iznos - v_iznos_plati) / v_iznos <= 0.005 then
+      let v_iznos_plati = v_iznos;
+  end if;
+  execute procedure konverzija(v_datum_izvod,v_iznos_plati,tvaluta,'MKD') into v_iznos_plati_den;
+ INSERT INTO   fin_izvod_i
+( fin_izvod_iid,  datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,    par_clientid,   iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,    os_aneksid)
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid,v_par_clientid,v_iznos_plati,v_iznos_plati_den,1,
+v_par_valutaid, v_os_aneksid) ;
+
+ end if ; 
+    
+    
+    
+    
+    
+    
+    
+  else
+
+
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+ 	select par_tip_dokumentid into v_par_tip_dokumentid_n from par_tip_dokument where par_tip_dokument='EVID'; 	
+	
+--execute procedure snimi_prevod(v_polisa_broj1,'admin') into  ttr_desc;
+     INSERT INTO   fin_izvod_i
+( fin_izvod_iid, datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,      iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,  desc) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid_n,v_iznos3,v_iznos3,1,363,
+v_polisa_broj3) ;
+ end if;
+ end if;
+--polisa 3 end  
+ 
+ 
+else 
+
+
+
+--ako nema polisa broj togas vo neevidentirana premija 
+
+select par_tip_dokumentid into v_par_tip_dokumentid_n from par_tip_dokument where par_tip_dokument='EVID'; 	
+select nvl(max(rbr),0)+1 into v_rbr from fin_izvod_i
+where fin_izvod_hid=v_FIN_IZVOD_HID;
+ if v_rbr is null then let v_rbr=1;
+ end if; 
+
+	
+--execute procedure snimi_prevod(tpovikuvanje_broj_odob,'admin') into  ttr_desc;
+     INSERT INTO   fin_izvod_i
+( fin_izvod_iid, datecreated,    usercreated,  version,  fin_izvod_hid,  rbr,  pat_tip_dokumentid,      iznos_naplata,  iznos_naplata_den,
+  par_statusid,  par_valutaid,  desc, klient_opis) 
+values(sq_fin_izvod_iid.nextval,current,'admin', 0, v_FIN_IZVOD_HID, v_rbr, v_par_tip_dokumentid_n,v_iznos1,v_iznos1,1,363,
+tpovikuvanje_broj_odob,tplakac_naziv) ;
+ 
+end if; 
+update FIN_IZVOD_FILE_ST set version = version+1,DATECHANGED=current, userchanged='admin', par_statusid=10 where FIN_IZVOD_FILE_STID=v_FIN_IZVOD_FILE_stID;
+--commit;
+
+end foreach;
+
+
+
+
+
+
+update FIN_IZVOD_FILE set version = version+1,DATECHANGED=current, userchanged='admin', f_avtomatski=2
+ where FIN_IZVOD_FILEID=p_FIN_IZVOD_FILEID;
+ 
+ 
+--commit work;
+return '1','STAVKITE  SE KREIRANI';
+
+end function;

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Request, Form, Query, Depends
+from fastapi import APIRouter, Request, Form, Query, Depends, HTTPException
 from fastapi.responses import StreamingResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from io import BytesIO
 import openpyxl
 from db_ifx import informix_cursor
+from auth.role_utils import has_any_role
 from datetime import datetime
 import os
 
@@ -21,6 +22,8 @@ def get_current_user(request: Request):
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    if not has_any_role(user, "matematicka_rezerva"):
+        raise HTTPException(status_code=403, detail="Access denied")
     return user
 
 # ---------------------------
@@ -49,6 +52,8 @@ async def export_data(
     user = request.session.get("user")
     if not user:
         return RedirectResponse(url="/siglife-report/login", status_code=303)
+    if not has_any_role(user, "matematicka_rezerva"):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Use POST form values if available
     if month_form: month = month_form

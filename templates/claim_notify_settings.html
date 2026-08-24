@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Известувања за штети — Поставки{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <h2>📧 Email адреси за известување при штета</h2>
+
+  {% if success %}
+  <div class="alert alert-success">{{ success }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <p style="color:#5d6d7e; font-size:.88rem; margin-bottom:1.2rem;">
+    При секоја нова пријава на штета од Иуте, системот испраќа email до адресите подолу.<br>
+    Внесете една адреса по ред.
+  </p>
+
+  <form method="post" action="/siglife-report/claim-notify-settings">
+    <div class="form-group">
+      <label>Email адреси (по една во ред)</label>
+      <textarea name="emails_input" rows="6" style="resize:vertical;">{{ emails }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Зачувај</button>
+  </form>
+</div>
+{% endblock %}

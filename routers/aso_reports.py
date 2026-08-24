@@ -31,10 +31,10 @@ USER_CREATED = "admin"
 def ImportSI(mesec, godina):
     try:
         month_number = MONTHS.index(mesec) + 1
-        OK, _, rez = ASO.prebSI(month_number, godina)
+        OK, rez = ASO.ImportSI(month_number, godina)
         if not OK:
-            return False, "❌ Грешка при пребарување број 1"
-        return True, f"✅ Операцијата е успешна! Резултат: {rez}"
+            return False, f"❌ Грешка: {rez}"
+        return True, rez
     except Exception as e:
         return False, f"⚠️ Грешка: {str(e)}"
 
@@ -45,7 +45,18 @@ def genSI(mesec, godina):
         OK, rez = ASO.ImportSISp11(month_number, godina)
         if not OK:
             return False, f"❌ Грешка: {rez}"
-        return True, f"✅ Операцијата е успешна! Резултат: {rez}"
+        return True, rez
+    except Exception as e:
+        return False, f"⚠️ Грешка: {str(e)}"
+
+
+def gen_stat_pregledi(mesec, godina):
+    try:
+        month_number = MONTHS.index(mesec) + 1
+        OK, rez = ASO.GenerateStatPregledi(month_number, godina)
+        if not OK:
+            return False, f"❌ Грешка: {rez}"
+        return True, rez
     except Exception as e:
         return False, f"⚠️ Грешка: {str(e)}"
 
@@ -56,7 +67,7 @@ def Sp1analitika_a(mesec, godina):
         OK, rez = ASO.SP1analitika2(month_number, godina)
         if not OK:
             return False, f"❌ Грешка: {rez}"
-        return True, f"✅ Операцијата е успешна! Резултат: {rez}"
+        return True, rez
     except Exception as e:
         return False, f"⚠️ Грешка: {str(e)}"
 
@@ -67,7 +78,7 @@ def Sp2analitika_a(mesec, godina):
         OK, rez = ASO.SP2analitika(month_number, godina)
         if not OK:
             return False, f"❌ Грешка: {rez}"
-        return True, f"✅ Операцијата е успешна! Резултат: {rez}"
+        return True, rez
     except Exception as e:
         return False, f"⚠️ Грешка: {str(e)}"
 

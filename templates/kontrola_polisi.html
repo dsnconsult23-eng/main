@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Контрола на полиси{% endblock %}
+
+{% block content %}
+<div class="page-title">Контрола на полиси</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:1.25rem;">
+  <form method="post" action="/siglife-report/kontrola-polisi">
+    <div class="form-group" style="margin:0 0 1rem 0">
+      <label>Кои проверки да се извршат? (избери барем една — секоја се извршува одделно за да нема timeout)</label>
+      <div style="display:flex; flex-direction:column; gap:.4rem; margin-top:.4rem;">
+        {% for key, label, _fn in available_checks %}
+        <label style="font-weight:normal; display:flex; align-items:center; gap:.5rem; {% if key == 'obnovena_nedostasuvaat' %}display:none;{% endif %}">
+          <input type="checkbox" name="checks" value="{{ key }}" {% if key in selected_checks %}checked{% endif %}>
+          {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div style="display:flex; gap:1rem; align-items:end; flex-wrap:wrap;">
+      <div class="form-group" style="margin:0">
+        <label>Година (за проверка 2 и 3)</label>
+        <input type="number" name="godina" value="{{ godina }}" min="2000" max="2100" required>
+      </div>
+      <button type="submit" class="btn btn-primary">🔎 Провери</button>
+    </div>
+  </form>
+</div>
+
+{% if searched %}
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="display:flex; flex-wrap:wrap; border-bottom:1px solid #e0e0e0;">
+    <button type="button" class="kp-tab-btn kp-tab-active" data-tab="tab1" onclick="kpShowTab('tab1', this)">
+      1) Статус 18/19/20/36/37/42 — со салдо
+    </button>
+    <button type="button" class="kp-tab-btn" data-tab="tab2" onclick="kpShowTab('tab2', this)" style="display:none;">
+      2) Полиси — недостасуваат фактури
+    </button>
+    <button type="button" class="kp-tab-btn" data-tab="tab3" onclick="kpShowTab('tab3', this)">
+      2) Активни — недостасуваат фактури
+    </button>
+    <button type="button" class="kp-tab-btn" data-tab="tab4" onclick="kpShowTab('tab4', this)">
+      3) Наплата &gt; износ
+    </button>
+  </div>
+
+  <style>
+    .kp-tab-btn {
+      flex: 1 1 auto;
+      min-width: 180px;
+      padding: .9rem 1rem;
+      border: none;
+      background: #f5f6f8;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .88rem;
+      color: #34495e;
+      border-bottom: 3px solid transparent;
+    }
+    .kp-tab-btn:hover { background: #eceff3; }
+    .kp-tab-btn.kp-tab-active {
+      background: #fff;
+      color: #1a3a5c;
+      border-bottom: 3px solid #1a3a5c;
+    }
+    .kp-tab-panel { display: none; padding: 1.25rem; }
+    .kp-tab-panel.kp-tab-active { display: block; }
+  </style>
+
+  <div id="tab1" class="kp-tab-panel kp-tab-active">
+    {% if "kapitalizirana_faktura_nula" not in selected_checks %}
+    <div class="alert">ℹ️ Оваа проверка не беше избрана.</div>
+    {% elif results.kapitalizirana_faktura_nula.error %}
+    <div class="alert alert-error">❌ {{ results.kapitalizirana_faktura_nula.error }}</div>
+    {% elif results.kapitalizirana_faktura_nula %}
+    <div style="margin-bottom:.75rem;">
+      <a class="btn btn-primary" href="/siglife-report/kontrola-polisi/export/status-saldo">⬇️ Извези во Excel</a>
+    </div>
+    <table>
+      <thead><tr><th>Полиса</th><th>Статус</th><th>Состојба</th><th style="text-align:right">Вк. Износ</th><th style="text-align:right">Вк. Наплата</th><th style="text-align:right">Салдо</th></tr></thead>
+      <tbody>
+        {% for r in results.kapitalizirana_faktura_nula %}
+        <tr>
+          <td>{{ r.polisa_broj }}</td>
+          <td>{{ r.polisa_status_desc }}</td>
+          <td>{{ r.polisa_sosotojba }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.vk_naplata) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.saldo) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-success">✅ Нема прекршувања.</div>
+    {% endif %}
+  </div>
+
+  <div id="tab2" class="kp-tab-panel">
+    {% if "obnovena_nedostasuvaat" not in selected_checks %}
+    <div class="alert">ℹ️ Оваа проверка не беше избрана.</div>
+    {% elif results.obnovena_nedostasuvaat.error %}
+    <div class="alert alert-error">❌ {{ results.obnovena_nedostasuvaat.error }}</div>
+    {% elif results.obnovena_nedostasuvaat %}
+    <table>
+      <thead><tr><th>Полиса</th><th>Анекс</th><th>Година</th><th>Очекувани рати</th><th>Генерирани</th></tr></thead>
+      <tbody>
+        {% for r in results.obnovena_nedostasuvaat %}
+        <tr>
+          <td>{{ r.polisa_broj }}</td>
+          <td>{{ r.aneks }}</td>
+          <td>{{ r.godina }}</td>
+          <td>{{ r.br_rati }}</td>
+          <td>{{ r.br_generirani }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-success">✅ Нема недостасувачки фактури.</div>
+    {% endif %}
+  </div>
+
+  <div id="tab3" class="kp-tab-panel">
+    {% if "aktivna_nedostasuvaat" not in selected_checks %}
+    <div class="alert">ℹ️ Оваа проверка не беше избрана.</div>
+    {% elif results.aktivna_nedostasuvaat.error %}
+    <div class="alert alert-error">❌ {{ results.aktivna_nedostasuvaat.error }}</div>
+    {% elif results.aktivna_nedostasuvaat %}
+    <table>
+      <thead><tr><th>Полиса</th><th>Анекс</th><th>Година</th><th>Очекувани рати</th><th>Генерирани</th></tr></thead>
+      <tbody>
+        {% for r in results.aktivna_nedostasuvaat %}
+        <tr>
+          <td>{{ r.polisa_broj }}</td>
+          <td>{{ r.aneks }}</td>
+          <td>{{ r.godina }}</td>
+          <td>{{ r.br_rati }}</td>
+          <td>{{ r.br_generirani }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-success">✅ Нема недостасувачки фактури.</div>
+    {% endif %}
+  </div>
+
+  <div id="tab4" class="kp-tab-panel">
+    {% if "naplata_pogolema_od_faktura" not in selected_checks %}
+    <div class="alert">ℹ️ Оваа проверка не беше избрана.</div>
+    {% elif results.naplata_pogolema_od_faktura.error %}
+    <div class="alert alert-error">❌ {{ results.naplata_pogolema_od_faktura.error }}</div>
+    {% elif results.naplata_pogolema_od_faktura %}
+    <table>
+      <thead>
+        <tr>
+          <th>Полиса</th><th>Клиент</th><th>Фактура</th><th>Дат. фактура</th>
+          <th style="text-align:right">Износ</th><th style="text-align:right">Наплата</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results.naplata_pogolema_od_faktura %}
+        <tr>
+          <td>{{ r.polisa_broj }}</td>
+          <td>{{ r.client_naziv }}</td>
+          <td>{{ r.faktura }}</td>
+          <td>{{ r.data_faktura }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.iznos) }}</td>
+          <td style="text-align:right">{{ "%.2f"|format(r.naplata) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-success">✅ Нема фактури со пренаплата.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function kpShowTab(tabId, btn) {
+  document.querySelectorAll('.kp-tab-panel').forEach(function (p) {
+    p.classList.remove('kp-tab-active');
+  });
+  document.querySelectorAll('.kp-tab-btn').forEach(function (b) {
+    b.classList.remove('kp-tab-active');
+  });
+  document.getElementById(tabId).classList.add('kp-tab-active');
+  btn.classList.add('kp-tab-active');
+}
+</script>
+
+{% endif %}
+{% endblock %}
