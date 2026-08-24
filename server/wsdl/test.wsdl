@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions 
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" 
+    xmlns:tns="http://example.com/soap" 
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" 
+    name="SoapService" 
+    targetNamespace="http://example.com/soap">
+
+    <types>
+        <xsd:schema targetNamespace="http://example.com/soap">
+            <xsd:element name="SendRequest">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element name="UserName" type="xsd:string"/>
+                        <xsd:element name="Password" type="xsd:string"/>
+                        <xsd:element name="RequestType" type="xsd:string"/>
+                        <xsd:element name="XMLData" type="xsd:string"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+            <xsd:element name="SendRequestResponse">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element name="Status" type="xsd:string"/>
+                        <xsd:element name="Error" type="xsd:string"/>
+                        <xsd:element name="RequestType" type="xsd:string"/>
+                        <xsd:element name="XMLResult" type="xsd:string"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+        </xsd:schema>
+    </types>
+
+    <message name="SendRequestInput">
+        <part name="parameters" element="tns:SendRequest"/>
+    </message>
+    <message name="SendRequestOutput">
+        <part name="parameters" element="tns:SendRequestResponse"/>
+    </message>
+
+    <portType name="SoapServicePortType">
+        <operation name="SendRequest">
+            <input message="tns:SendRequestInput"/>
+            <output message="tns:SendRequestOutput"/>
+        </operation>
+    </portType>
+
+    <binding name="SoapServiceBinding" type="tns:SoapServicePortType">
+        <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+        <operation name="SendRequest">
+            <soap:operation soapAction="SendRequest"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>

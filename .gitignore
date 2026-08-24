@@ -1,0 +1,10 @@
+/soap-web-services-env
+.env
+ssl/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.log
