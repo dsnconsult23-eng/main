@@ -135,11 +135,15 @@ if ENABLE_SCHEDULER:
         )
         scheduler.add_job(scheduled_sync_dolzna_premija,trigger='cron',hour=7, minute=12,id='sync_dolzna_premija',replace_existing=True, max_instances=1, coalesce=True        )
         scheduler.add_job(check_new_claims, trigger='cron', hour=11, minute=5, id='iute_claim_notification', max_instances=1, coalesce=True)
-        # Dospeana premija SMS (Tip A) - dodeka e SMS_DOSPEANA_TEST_MODE=true, pushta
-        # SEKOJ DEN vo 09:00 (bez ogranicuvanje na den vo mesecot, sekojdneven dedup).
-        # Koga ke se isklucci test rezimot, scheduled_prebSMSDospeanaPremija() sam
-        # se vrakja na proverka na ciljniot den (17-ti / najbliskiot raboten den).
-       # scheduler.add_job(scheduled_prebSMSDospeanaPremija, trigger='cron', hour=9, minute=0, id='sms_dospeana_premija', max_instances=1, coalesce=True)
+        # Ednokratno isprakjanje na dospeana premija SMS (Tip A) za septemvri 2026.
+        scheduler.add_job(
+            scheduled_prebSMSDospeanaPremija,
+            trigger='date',
+            run_date=datetime(2026, 9, 24, 11, 0),
+            id='sms_dospeana_premija_2026_09',
+            replace_existing=True,
+            max_instances=1,
+        )
         # Riziko kredit SMS (Tip B) - banka klienti so dolg, na denot na dospevanje (sekoj den).
         #scheduler.add_job(scheduled_prebSMSRizikoKredit, trigger='cron', hour=9, minute=5, id='sms_riziko_kredit', max_instances=1, coalesce=True)
         # scheduler.add_job(scheduled_prebSMSPromenaIme,trigger='cron', hour=7, minute=40, id='birthday_promena_ime')

@@ -52,12 +52,8 @@ ip_credentials = {
 credentials = ip_credentials.get(current_ip, {"username": "default_user", "password": "default_pass"})
 url = "https://web2sms.akton.net/rest/send_sms"
 
-# --- "Dospeana premija" SMS (Tip A) — pilot vo test rezim ---
-# Dodeka e True, realnata SMS se prakja do SMS_DOSPEANA_TEST_PHONE (ne do klienta),
-# no vo sms_audit_log se zapisuva REALNIOT telefon na klienta (recipient) za da
-# moze da se provери koj ЌE dobie poraka koga ke se prejde vo live rezim.
-SMS_DOSPEANA_TEST_MODE = os.environ.get("SMS_DOSPEANA_TEST_MODE", "true").strip().lower() in ("1", "true", "yes")
-SMS_DOSPEANA_TEST_PHONE = os.environ.get("SMS_DOSPEANA_TEST_PHONE", "38971297860").strip()
+# --- "Dospeana premija" SMS (Tip A) ---
+# Tip A e vo produkciski rezim: porakata se prakja na telefonot na klientot.
 SMS_DOSPEANA_MIN_EUR = 5.0
 SMS_DOSPEANA_MIN_MKD = 300.0
 
@@ -284,12 +280,13 @@ def scheduled_prebSMSRodenden():
 
 # ------------------------------------------------------------------
 # "Dospeana premija" SMS — Tip A (site klienti osven banka i Iute 40/).
-# Se prakja na 17-ti vo mesecot; ako 17-ti padne vo sabota/nedela,
-# se pomestuva na najbliskiot raboten den (ponedelnik).
+# Za septemvri 2026 se prakja ednokratno na 24-ti. Vo drugite meseci se
+# prakja na 17-ti; ako 17-ti padne vo sabota/nedela, se pomestuva na ponedelnik.
 # ------------------------------------------------------------------
 def _dospeana_premija_target_day(year: int, month: int) -> "datetime":
-    from calendar import monthrange
     from datetime import timedelta
+    if year == 2026 and month == 9:
+        return datetime(2026, 9, 24)
     day17 = datetime(year, month, 17)
     if day17.weekday() == 5:      # sabota
         day17 += timedelta(days=2)
@@ -455,8 +452,7 @@ def _merge_dolg_po_polisa_zamena(cursor, podatoci: list, has_valuta: bool) -> li
 # Statusi na polisa (kako vo vw_pregled2: polisa status, valuta, tip
 # na produkt, datum status, polisa sostojba), no preku direktni
 # join-ovi/UDF-ovi namesto celiot (bavniot) view — status se zema od
-# POSLEDNATA ponuda (maxpodbroj_datum), ist paттern kako vo
-# kontrola_polisi.py.
+# policy with the highest polisa_pod_broj and its linked offer.
 # ------------------------------------------------------------------
 def _fetch_polisa_statusi_za_izvoz(cur, polisa_brojevi: list) -> dict:
     polisa_brojevi = list(dict.fromkeys(p.strip() for p in polisa_brojevi if p))
@@ -484,7 +480,11 @@ def _fetch_polisa_statusi_za_izvoz(cur, polisa_brojevi: list) -> dict:
         JOIN os_ponuda o  ON o.os_ponudaid  = p.os_ponudaid
         JOIN os_produkt pr ON pr.os_produktid = o.os_produktid
         WHERE p.polisa_broj_cel IN ({placeholders})
-          AND o.ponuda_podbroj = maxpodbroj_datum(o.ponuda_broj, p.polisa_broj, o.os_produktid, TODAY)
+          AND p.polisa_pod_broj = (
+              SELECT MAX(latest.polisa_pod_broj)
+              FROM os_polisa latest
+              WHERE latest.polisa_broj_cel = p.polisa_broj_cel
+          )
         """
         cur.execute(sql, batch)
         for r in cur.fetchall():
@@ -522,6 +522,15 @@ def _tip_a_has_eligible_final_status(status: dict) -> bool:
     return not any(word in descriptions for word in _TIP_A_TERMINAL_STATUS_WORDS)
 
 
+# Keep Tip A aligned with the invoice balance shown in Polisa 360.  The
+# database function also accounts for payment/closing cases which are not
+# represented correctly by summing only fin_stavka rows with sifra_zatvaranje.
+_TIP_A_DOLG_EXPR = (
+    "NVL(b.iznos, 0) - "
+    "NVL(vesna.vrati_naplata(b.os_aneks_fakturaid), 0)"
+)
+
+
 # ------------------------------------------------------------------
 # Read-only "pregled" funkcii za Excel izvoz (ne praka SMS, ne pisuva
 # vo sms_audit_log) — istite SELECT-i kako prebSMSDospeanaPremija /
@@ -529,7 +538,7 @@ def _tip_a_has_eligible_final_status(status: dict) -> bool:
 # dobile SMS.
 # ------------------------------------------------------------------
 def _query_dospeana_premija_za_izvoz():
-    sql = """
+    sql = f"""
     WITH base AS (
         SELECT
             x0.os_aneks_fakturaid,
@@ -555,24 +564,15 @@ def _query_dospeana_premija_za_izvoz():
               WHERE fg.os_aneks_fakturaid = x0.os_aneks_fakturaid
                 AND fg.iznos_d IS NOT NULL
           )
-    ),
-    naplata AS (
-        SELECT fs.os_aneks_fakturaid, SUM(NVL(fs.iznos_p, 0)) AS naplata
-        FROM fin_stavka fs
-        JOIN base b ON b.os_aneks_fakturaid = fs.os_aneks_fakturaid
-        WHERE fs.sifra_zatvaranje IS NOT NULL
-          AND fs.f_rs <> 'N'
-        GROUP BY fs.os_aneks_fakturaid
     )
     SELECT
         b.polisa_broj,
         MAX(b.telefon) AS telefon,
         MAX(vrati_valutaid_polisa(b.os_polisaid)) AS valutaid,
-        SUM(b.iznos - NVL(n.naplata, 0)) AS dolg
+        SUM({_TIP_A_DOLG_EXPR}) AS dolg
     FROM base b
-    LEFT JOIN naplata n ON n.os_aneks_fakturaid = b.os_aneks_fakturaid
     GROUP BY b.polisa_broj
-    HAVING SUM(b.iznos - NVL(n.naplata, 0)) > 0
+    HAVING SUM({_TIP_A_DOLG_EXPR}) > 0
     """
 
     cur, ok = Connection.OSISinit()
@@ -754,11 +754,9 @@ def prebSMSDospeanaPremija(selected_option=None):
       - valuta (EUR/den) se opredeluva po polisa preku vrati_valutaid_polisa(os_polisaid),
         isto kako vo prebSMS()
     """
-    # Vo test rezim dedup-ot e DNEVEN (ne mesecen), za istata polisa da moze da
-    # dobie SMS sekoj den dodeka se testira; vo produkcija ostanuva mesecen.
-    dedup_tag = datetime.today().strftime("%Y%m%d") if SMS_DOSPEANA_TEST_MODE else datetime.today().strftime("%Y%m")
+    dedup_tag = datetime.today().strftime("%Y%m")
 
-    sql = """
+    sql = f"""
     WITH base AS (
         SELECT
             x0.os_aneks_fakturaid,
@@ -784,24 +782,15 @@ def prebSMSDospeanaPremija(selected_option=None):
               WHERE fg.os_aneks_fakturaid = x0.os_aneks_fakturaid
                 AND fg.iznos_d IS NOT NULL
           )
-    ),
-    naplata AS (
-        SELECT fs.os_aneks_fakturaid, SUM(NVL(fs.iznos_p, 0)) AS naplata
-        FROM fin_stavka fs
-        JOIN base b ON b.os_aneks_fakturaid = fs.os_aneks_fakturaid
-        WHERE fs.sifra_zatvaranje IS NOT NULL
-          AND fs.f_rs <> 'N'
-        GROUP BY fs.os_aneks_fakturaid
     )
     SELECT
         b.polisa_broj,
         MAX(b.telefon) AS telefon,
         MAX(vrati_valutaid_polisa(b.os_polisaid)) AS valutaid,
-        SUM(b.iznos - NVL(n.naplata, 0)) AS dolg
+        SUM({_TIP_A_DOLG_EXPR}) AS dolg
     FROM base b
-    LEFT JOIN naplata n ON n.os_aneks_fakturaid = b.os_aneks_fakturaid
     GROUP BY b.polisa_broj
-    HAVING SUM(b.iznos - NVL(n.naplata, 0)) > 0
+    HAVING SUM({_TIP_A_DOLG_EXPR}) > 0
     """
 
     print(sql)
@@ -906,7 +895,7 @@ def prebSMSDospeanaPremija(selected_option=None):
             f"I preku nasata web strana. Vi blagodarime"
         )
 
-        send_to = SMS_DOSPEANA_TEST_PHONE #if SMS_DOSPEANA_TEST_MODE else cleaned_number
+        send_to = cleaned_number
 
         params = {
             "from": "SigalLife",
@@ -921,10 +910,7 @@ def prebSMSDospeanaPremija(selected_option=None):
             ok = response.status_code == 200
             if ok:
                 sent_count += 1
-            print(
-                f"[DPP]{' [TEST MODE, klient=' + cleaned_number + ']' if SMS_DOSPEANA_TEST_MODE else ''} "
-                f"polisa={polisa_broj} -> {send_to}: {response.status_code} - {response.text}"
-            )
+            print(f"[DPP] polisa={polisa_broj} -> {send_to}: {response.status_code} - {response.text}")
             log_sms_audit(
                 job_id=job_id,
                 recipient=cleaned_number,  # realniot klient, za audit, i vo test rezim
@@ -948,17 +934,10 @@ def prebSMSDospeanaPremija(selected_option=None):
                 error_message=str(e),
             )
 
-    mode_note = " (TEST REZIM - site poraki isprateni na test broj)" if SMS_DOSPEANA_TEST_MODE else ""
-    return True, podatoci, f"Isprateni se {sent_count} SMS poraki za dospeana premija{mode_note}"
+    return True, podatoci, f"Isprateni se {sent_count} SMS poraki za dospeana premija"
 
 
 def scheduled_prebSMSDospeanaPremija():
-    if SMS_DOSPEANA_TEST_MODE:
-        # Dodeka e vo test rezim - pushta sekoj den, bez ogranicuvanje na ciljniot den,
-        # za polesno testiranje (site poraki i taka odat na SMS_DOSPEANA_TEST_PHONE).
-        print("[DPP] TEST REZIM - preskoknuvam provera na ciljniot den, pushtam denes")
-        return prebSMSDospeanaPremija(None)
-
     today = datetime.today()
     target_day = _dospeana_premija_target_day(today.year, today.month)
     if today.date() != target_day.date():
